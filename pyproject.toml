@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ani-cli-ar-gui"
+dynamic = ["version"]
+description = "AniNova — desktop GUI anime streaming with Arabic subtitles"
+readme = "README.md"
+license = "GPL-3.0"
+authors = [
+    {name = "NoBy"}
+]
+keywords = ["anime", "streaming", "gui", "arabic", "subtitles", "desktop"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Video",
+    "Environment :: X11 Applications",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "pywebview>=4.0",
+    "rich>=13.0.0",
+    "requests>=2.31.0",
+    "httpx>=0.28.0",
+    "websockets",
+    "cryptography",
+    "pycryptodomex",
+    "playwright>=1.40.0",
+    "supabase>=2.0.0",
+    "certifi",
+]
+
+[project.urls]
+Homepage = "https://github.com/nobynoooob/AniNova"
+Repository = "https://github.com/nobynoooob/AniNova"
+Issues = "https://github.com/nobynoooob/AniNova/issues"
+Changelog = "https://github.com/nobynoooob/AniNova/releases"
+
+[project.scripts]
+ani-cli-ar-gui = "ani_cli_arabic.gui:main"
+aninova = "ani_cli_arabic.gui:main"
+
+[tool.setuptools]
+packages = {find = {include = ["ani_cli_arabic*"]}}
+include-package-data = true
+
+[tool.setuptools.package-data]
+ani_cli_arabic = ["ui/*.html"]
+
+[tool.setuptools.dynamic]
+version = {attr = "ani_cli_arabic.version.__version__"}

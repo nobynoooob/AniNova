@@ -1,0 +1,11 @@
+# AniNova (GUI) dependencies
+pywebview>=4.0        # Native webview desktop shell
+httpx>=0.28.0         # HTTP client for scrapers
+requests>=2.31.0      # HTTP client for API / embeds
+websockets            # Watch Together (Supabase Realtime transport)
+cryptography>=41.0.0  # AllAnime AES-GCM crypto handshake
+pycryptodomex         # Optional scraper crypto helpers
+playwright>=1.40.0    # Headless browser for CF-gated stream extraction
+supabase>=2.0.0       # Watch Together (Supabase Realtime)
+certifi               # CA bundle for frozen builds
+rich>=13.0.0          # Progress bars in shared utils
