@@ -25,7 +25,7 @@ Usage:
     python build_desktop.py                            # GUI build
     python build_desktop.py --target cli               # CLI build
     python build_desktop.py --target gui --bundle-mpv  # embed mpv (PATH or mpv/)
-    python build_desktop.py --exclude-module numpy     # extra module exclusions
+    python build_desktop.py --exclude-module unittest   # extra module exclusions
     python build_desktop.py --zip                      # also produce {exe}.zip
 """
 import argparse
@@ -297,13 +297,10 @@ def _excludes(target: str, extra: list) -> list:
         "test", "pydoc_data", "lib2to3", "setuptools", "pip", "wheel",
     ]
     if target == "gui":
-        # `email`/`numpy`/`PIL` must NOT be excluded: importing the package
-        # (ani_cli_arabic/__init__.py) always pulls in app -> ui.py, which does
-        # `import numpy` and `from PIL import Image, ImageEnhance` at module
-        # load. httpx/websockets/cryptography also import email.* at import
-        # time. Excluding any of them crashes the GUI at startup. PyQt/PySide/
-        # customtkinter are no-ops (pywebview uses WinForms/GTK) but guard
-        # against a stray Qt import.
+        # `email` must NOT be excluded: httpx/websockets/cryptography import
+        # email.* at import time, and excluding it crashes the GUI at startup.
+        # PyQt/PySide/customtkinter are no-ops (pywebview uses WinForms/GTK)
+        # but guard against a stray Qt import.
         base += [
             "tkinter", "unittest", "pydoc",
             "PyQt5", "PyQt6", "PySide2", "PySide6", "customtkinter",

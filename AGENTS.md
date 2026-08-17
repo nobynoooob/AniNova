@@ -1,20 +1,20 @@
-# ani-cli-arabic
+# AniNova
 
 ## Development Rules & Guidelines
 
 ### 🤖 Role & Behavior Directive
-- **Proactive Partner**: Do not just execute commands passively. Audit the codebase, detect performance bottlenecks, and proactively implement clean optimizations.
-- **Safety & Guardrails**: IF a user prompt or modification would break critical dependencies (e.g., excluding `numpy`, `PIL`, or `email`), crash stream loading, or break builds, YOU MUST WARN THE USER FIRST and refuse to execute the breaking change.
-- **Parity Rule**: The GUI target must ALWAYS maintain 1:1 feature, speed, and provider parity with the CLI engine (`ani_cli_arabic/app.py`). Never disable a provider or feature in the GUI unless technically impossible on desktop platforms.
+- **Proactive Partner**: Do not just execute commands proactively. Audit the codebase, detect performance bottlenecks, and proactively implement clean optimizations.
+- **Safety & Guardrails**: IF a user prompt or modification would break critical dependencies, crash stream loading, or break builds, YOU MUST WARN THE USER FIRST and refuse to execute the breaking change.
+- **Provider Parity**: All providers in `scrapers/` and the Arabic `api.py` pipeline must remain fully exposed and selectable in the GUI. Never disable a provider unless technically impossible on desktop platforms.
 
 ### ⚡ Performance Guidelines
 1. Never block the UI thread during server resolving or video extraction. Use asynchronous workers or background threads.
 2. Always pass MPV buffer/caching flags for slow connections (`--cache=yes`, `--cache-secs=300`, `--demuxer-max-bytes=150M`).
-3. Ensure all scrapers present in the CLI are fully exposed and selectable in the GUI dropdowns/menus.
+3. Never let Playwright browser work serialize with the UI — resolution must run on worker threads with `abort_event`/`cancel_event` support.
 
 ## Package structure
-- Single package `ani_cli_arabic/`, entry point `ani_cli_arabic.app:main`
-- Two UI entry paths: standard TUI (`app.py`, default) and minimal CLI (`cli.py`, `--interactive` flag)
+- Single package `ani_cli_arabic/`, entry point `ani_cli_arabic.gui:main` (`python -m ani_cli_arabic.gui`)
+- PyWebView desktop GUI: `gui.py` hosts `ui/index.html` (webview SPA, `pywebview.api` JS bridge)
 - Two independent language tracks: Arabic (via `api.py` → `AnimeAPI`) and English (via `scrapers/`)
 
 ## English scraping pipeline
@@ -59,7 +59,7 @@
 - Kept strictly separated from English code — English and Arabic provider loops must never mix or cross-fallback
 
 ## Watch Together players
-- Host and guest each pick mpv or VLC at session start (`app.py:_select_watch_player`, respects `settings.player` default).
+- Host and guest each pick mpv or VLC at session start (in `gui.py`, respects `settings.player` default).
 - mpv host: `MpvIpcClient` on a unique Unix socket (`_unique_socket_path`). VLC host: `VlcIpcClient` over TCP on a free loopback port (`_pick_free_port`, range 42000-43000), selected before launch.
 - VLC is launched with `--extraintf=rc --rc-host=127.0.0.1:<PORT>` (host, keeps Qt GUI) or `--intf=rc` is NOT used — guests use the same `--extraintf=rc` launch plus unbind hotkeys.
 - **`--rc-quiet` is NOT available on VLC 3.x** (dropped after 2.x) — do not pass it; the rc interface doesn't echo commands in VLC 3, and responses are terminated by the `> ` prompt.
@@ -80,35 +80,33 @@
 | `scrapers/allanime.py` | AllAnime GraphQL scraper (search/episodes verified) |
 | `scrapers/embeds.py` | Shared embed gateway: `extract_media_url`, `resolve_embed` |
 | `api.py` | Arabic provider `AnimeAPI` |
-| `app.py` | Main entry, TUI mode |
-| `cli.py` | Minimal CLI mode |
+| `gui.py` | PyWebView GUI entry (`main`), `JSApi` JS bridge, resolve/abort pipeline |
+| `ui/index.html` | Webview SPA frontend (loaded by gui.py) |
 | `watch_together.py` | Watch Together: `SupabaseRealtime`, `MpvIpcClient`, `VlcIpcClient`, `WatchHost`/`WatchGuest` |
 | `player.py` | `PlayerManager`: mpv/VLC arg builders, `build_vlc_args` (rc + lock flags) |
 | `playwright_bootstrap.py` | stdlib-only runtime Chromium auto-install (`ensure_playwright_chromium`) used by scrapers when the browser isn't bundled |
 
 ## External tooling
-- **mpv** required for playback (auto-installed by `deps.py`)
+- **mpv** required for playback
 - **ffmpeg** helper dependency
-- **fzf** used for fuzzy selection in CLI mode when available
 - **Playwright** (Chromium) for stream extraction on miruro (primary), mkissa, and gogoanime — browser shared at class level in MiruroScraper
 - Set `ANI_API_BASE_URL` environment variable to point the `api` scraper at a self-hosted Consumet instance
 - `cryptography` (not pycryptodome) is required by `allanime.py` for the best-effort `tobeparsed` AES-256-CTR decrypt
 
 ## Packaging / releases
-- `build_desktop.py` supports `--target {gui,cli}` (default `gui`). GUI = windowed one-file exe with `ui/` assets; CLI = console one-file exe using `main.py`, excludes all GUI frameworks. `--exclude-module` adds exclusions, `--zip` produces `dist/<exe>.zip`.
-- Release binaries do **NOT** bundle the Playwright Chromium browser (that bloated old builds to 430 MB). The Playwright driver is still bundled via `--collect-all playwright`; on first stream use `playwright_bootstrap.ensure_playwright_chromium` downloads Chromium into the user's ms-playwright cache. numpy/PIL/email are **kept** in every build: importing the package (`ani_cli_arabic/__init__.py`) unconditionally pulls in `app` → `ui.py`, which does `import numpy` / `from PIL import Image, ImageEnhance` at module load (and httpx/websockets/cryptography import `email.*`). Excluding any of them crashes both GUI and CLI at startup.
-- `.github/workflows/build.yml` runs two matrix jobs (`build-gui`, `build-cli`) for windows/linux and a `release` job that uploads `ani-cli-ar-{gui,cli}-{windows,linux}` assets. Windows GUI bundles mpv; Linux/CLI rely on system mpv.
+- `build_desktop.py --target gui` builds the windowed PyWebView executable with `ui/` assets. `--exclude-module` adds exclusions, `--onedir` produces a portable folder, `--bundle-mpv` embeds mpv, `--zip` produces `dist/<exe>.zip`.
+- Release binaries do **NOT** bundle the Playwright Chromium browser (that bloated old builds to 430 MB). The Playwright driver is still bundled via `--collect-all playwright`; on first stream use `playwright_bootstrap.ensure_playwright_chromium` downloads Chromium into the user's ms-playwright cache.
+- `.github/workflows/build.yml` runs `build-gui` (windows/linux) plus a `release` job that uploads the AniNova assets. Windows bundles mpv; Linux relies on system mpv.
 
 ## Version / packaging
-- Single source of version: `ani_cli_arabic/version.py:__version__` (currently `1.8.4`)
-- Build scripts in `scripts/` (build.sh, build.bat, build.py, setup.py)
-- Install via `install.sh` or AUR package
-- pypi distribution, AUR (`ani-cli-arabic`)
+- Single source of version: `ani_cli_arabic/version.py:__version__`
+- GUI package entry points: `ani-cli-ar-gui` / `aninova` (both `ani_cli_arabic.gui:main`)
+- Desktop releases via `build_desktop.py` + `.github/workflows/build.yml` (GitHub Actions)
 
 ## Conventions
 - No tests exist in the repo
 - No formatter/linter config (no ruff, black, pylint config found)
-- No CI workflows
+- CI: `.github/workflows/build.yml` (GUI desktop builds on tag pushes)
 
 ## Execution guidelines
 
