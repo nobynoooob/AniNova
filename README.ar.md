@@ -175,19 +175,8 @@ python build_desktop.py --exclude-module unittest      # استثناءات إض
 
 ## 👥 المساهمون
 
-</div>
-
-<div align="center">
-
-[![Contributors](https://contrib.rocks/image?repo=nobynoooob/AniNova)](https://github.com/nobynoooob/AniNova/graphs/contributors)
-
-</div>
-
-<div dir="rtl">
-
-**المساهمون الرئيسيون:**
-- [@np4abdou1](https://github.com/np4abdou1) - المنشئ والمطور الرئيسي
-- [@Anas-Tou](https://github.com/Anas-Tou) - مساهم
+**المنشئ والمشرف:**
+- [@nobynoooob](https://github.com/nobynoooob) - المنشئ والمشرف الرئيسي
 
 تريد المساهمة؟ لا تتردد في فتح قضية أو تقديم طلب سحب!
 

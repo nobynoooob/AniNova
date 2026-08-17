@@ -167,11 +167,8 @@ python build_desktop.py --exclude-module unittest      # extra exclusions
 
 ## 👥 Contributors
 
-[![Contributors](https://contrib.rocks/image?repo=nobynoooob/AniNova)](https://github.com/nobynoooob/AniNova/graphs/contributors)
-
-**Key Contributors:**
-- [@np4abdou1](https://github.com/np4abdou1) - Creator and main developer
-- [@Anas-Tou](https://github.com/Anas-Tou) - Contributor
+**Creator & Maintainer:**
+- [@nobynoooob](https://github.com/nobynoooob) - Creator and maintainer
 
 Want to contribute? Feel free to open issues or submit pull requests!
 
