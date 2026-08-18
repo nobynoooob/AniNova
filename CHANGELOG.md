@@ -6,7 +6,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/) conventions. This
 
 ---
 
-## [Unreleased]
+## [v1.2.0] - 2026-08-18
 
 ### ⌨️ Global Hardware-Level Host Controls
 - System-wide Watch Together host hotkeys that work while the app is tabbed out (full-screen game/browser): play/pause, seek forward/backward, next/previous episode.
