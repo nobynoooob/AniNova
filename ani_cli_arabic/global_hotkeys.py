@@ -27,7 +27,7 @@ import re
 import sys
 import threading
 import time
-from typing import Callable, Dict, Optional, Set, Tuple
+from typing import Any, Callable, Dict, Optional, Set, Tuple
 
 
 # ---------------------------------------------------------------------------
@@ -335,10 +335,13 @@ class _X11Backend:
             self._error = f"libX11.so.6 not loadable: {exc}"
             return False
         lib.XOpenDisplay.restype = ctypes.c_void_p
+        lib.XOpenDisplay.argtypes = [ctypes.c_char_p]
         dpy = lib.XOpenDisplay(None)
         if not dpy:
             self._error = "XOpenDisplay failed (no X11 connection)"
             return False
+        lib.XDefaultRootWindow.restype = ctypes.c_ulong
+        lib.XDefaultRootWindow.argtypes = [ctypes.c_void_p]
         lib.XStringToKeysym.restype = ctypes.c_ulong
         lib.XStringToKeysym.argtypes = [ctypes.c_char_p]
         lib.XKeysymToKeycode.restype = ctypes.c_uint
@@ -353,6 +356,8 @@ class _X11Backend:
         lib.XPending.restype = ctypes.c_int
         lib.XFlush.argtypes = [ctypes.c_void_p]
         lib.XCloseDisplay.argtypes = [ctypes.c_void_p]
+        lib.XUngrabKeyboard.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
+        lib.XUngrabKeyboard.restype = ctypes.c_int
         root = lib.XDefaultRootWindow(dpy)
         self._lib = lib
         self._dpy = dpy
@@ -417,6 +422,9 @@ class _X11Backend:
 
     def stop(self) -> None:
         self._stop.set()
+        t = self._thread
+        if t is not None:
+            t.join(timeout=1.0)
         if self._lib and self._dpy:
             try:
                 self._lib.XUngrabKeyboard(self._dpy, self.CurrentTime)
@@ -427,7 +435,13 @@ class _X11Backend:
 
 
 class _XKeyEvent(ctypes.Structure):
-    """mirrors Xlib's XKeyEvent (first member of the XEvent union)."""
+    """mirrors Xlib's XKeyEvent (first member of the XEvent union).
+
+    ``XNextEvent`` writes a **full** ``XEvent`` union (~192 bytes on 64-bit
+    X11) into the caller's buffer, so the struct carries extra trailing
+    padding to prevent a heap/stack buffer overflow. The named fields keep
+    their exact Xlib offsets.
+    """
 
     _fields_ = [
         ("type", ctypes.c_int),
@@ -445,6 +459,7 @@ class _XKeyEvent(ctypes.Structure):
         ("state", ctypes.c_uint),
         ("keycode", ctypes.c_uint),
         ("same_screen", ctypes.c_int),
+        ("_pad", ctypes.c_ubyte * 128),
     ]
 
 
@@ -583,45 +598,132 @@ class GlobalHotkeyManager:
 
     ``bindings`` maps an action name (e.g. ``"play_pause"``) to a hotkey spec
     (e.g. ``"ctrl+alt+p"``). ``callback`` is invoked on a daemon thread and
-    must be non-blocking. ``start()`` returns True when the OS backend is
-    active; otherwise ``error`` holds the reason.
+    must be non-blocking.
+
+    Startup is **asynchronous**: ``start()`` only runs cheap local checks
+    (platform / session env vars, never touching the OS) and then hands the
+    real backend setup — X11 display connection + key grabs, Windows
+    ``RegisterHotKey``, macOS Carbon — to a fully detached daemon thread.
+    The calling thread (normally the GUI/bridge thread, e.g. the "Host Room"
+    click) never performs a blocking OS call, so the UI stays responsive even
+    when the X server is slow or unreachable. Poll ``status()`` for the live
+    ``starting``/``active``/``inactive`` state.
     """
 
     def __init__(self, bindings: Dict[str, str], callback: Callable[[str], None]):
         self.bindings = dict(bindings)
         self.callback = callback
+        self._lock = threading.Lock()
         self._backend = None
+        self._pending_backend = None
+        self._thread: Optional[threading.Thread] = None
+        self._cancel = threading.Event()
+        self._state = "inactive"  # "starting" | "active" | "inactive"
         self.active = False
         self.error = ""
+
+    def _precheck(self) -> str:
+        """Cheap, purely-local failure checks; never touches the OS."""
+        if sys.platform in ("win32", "darwin"):
+            return ""
+        if sys.platform.startswith("linux"):
+            session = (os.environ.get("XDG_SESSION_TYPE") or "").lower()
+            if os.environ.get("WAYLAND_DISPLAY") or session == "wayland":
+                return ("Wayland session detected; global hotkeys need X11 "
+                        "(XGrabKey). Log into an X11 session or set DISPLAY.")
+            if not os.environ.get("DISPLAY"):
+                return "No X11 DISPLAY available for global hotkeys"
+        return ""
 
     def start(self) -> bool:
-        if self.active:
-            return True
-        backend = _build_backend(self.bindings, self.callback)
-        if backend is None:
-            self.error = f"Global hotkeys unsupported on {sys.platform}"
-            return False
-        if not backend.start():
-            self.error = getattr(backend, "_error", "") or "backend failed to start"
+        """Initiate global-hotkey startup on a detached daemon thread.
+
+        Returns True when the listener has been (or is being) started; the
+        final backend state is reported asynchronously via ``status()``.
+        Never blocks on the caller.
+        """
+        with self._lock:
+            if self._state == "active":
+                return True
+            if self._state == "starting":
+                return True
+            reason = self._precheck()
+            if reason:
+                self.error = reason
+                self._state = "inactive"
+                return False
+            backend = _build_backend(self.bindings, self.callback)
+            if backend is None:
+                self.error = f"Global hotkeys unsupported on {sys.platform}"
+                self._state = "inactive"
+                return False
+            self._pending_backend = backend
+            self._cancel.clear()
+            self._state = "starting"
             self.active = False
-            return False
-        self._backend = backend
-        self.active = True
-        self.error = ""
+            self.error = ""
+        thread = threading.Thread(
+            target=self._start_worker, args=(backend,),
+            daemon=True, name="global-hotkeys-init",
+        )
+        self._thread = thread
+        thread.start()
         return True
 
+    def _start_worker(self, backend) -> None:
+        """Run the backend's (potentially blocking) setup on this thread."""
+        try:
+            ok = backend.start()
+            with self._lock:
+                if self._cancel.is_set():
+                    try:
+                        backend.stop()
+                    except Exception:
+                        pass
+                    return
+                if ok:
+                    self._backend = backend
+                    self.active = True
+                    self.error = ""
+                    self._state = "active"
+                else:
+                    self.error = (getattr(backend, "_error", "") or
+                                  "backend failed to start")
+                    self._state = "inactive"
+        except Exception as exc:
+            with self._lock:
+                self.error = f"global hotkeys init failed: {exc}"
+                self._state = "inactive"
+        finally:
+            with self._lock:
+                self._pending_backend = None
+
+    def status(self) -> Dict[str, Any]:
+        return {
+            "active": self.active,
+            "starting": self._state == "starting",
+            "error": self.error or "",
+        }
+
     def stop(self) -> None:
-        if self._backend is not None:
+        with self._lock:
+            self._cancel.set()
+            self._state = "inactive"
+            self.active = False
+            backend = self._backend
+            self._backend = None
+        if backend is not None:
             try:
-                self._backend.stop()
+                backend.stop()
             except Exception:
                 pass
-            self._backend = None
-        self.active = False
 
     def __repr__(self) -> str:
-        state = "active" if self.active else ("error: " + self.error)
-        return f"<GlobalHotkeyManager {state}>"
+        if self._state == "active":
+            return "<GlobalHotkeyManager active>"
+        if self._state == "starting":
+            return "<GlobalHotkeyManager starting...>"
+        return f"<GlobalHotkeyManager inactive: {self.error}>"
 
 
 def _build_backend(bindings, callback):

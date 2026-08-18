@@ -6,6 +6,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/) conventions. This
 
 ---
 
+## [Unreleased]
+
+### ⚡ Global Hotkeys — UI freeze fix + crash guards
+- **Async startup**: `GlobalHotkeyManager.start()` now only does cheap local checks on the caller and runs the full backend setup (X11 display connect, key grabs, `RegisterHotKey`, Carbon) on a fully detached daemon thread. The "Host Room" click no longer blocks on the GUI/bridge thread — no more "Application is not responding", even if the X server is slow or unreachable.
+- `start()` returns once startup is *initiated*; live state is reported via `status()` (`starting`/`active`/`inactive`) and surfaced in the UI through `global_hotkeys_status()` (`starting` flag added). `stop()` is safe to call mid-startup.
+- Fixed three latent X11 ctypes crashes that could segfault the whole process: `XDefaultRootWindow` now declares its `c_ulong` return (a default `c_int` truncated the 64-bit Window ID), `XUngrabKeyboard` declares `c_void_p` argtypes (untyped ctypes truncated the `Display*` pointer), and `_XKeyEvent` gained trailing padding so `XNextEvent`'s full ~192-byte `XEvent` union write can't overflow the buffer.
+- `_X11Backend.stop()` joins the pump thread (≤1s) before closing the display to avoid a close-while-reading race.
+
+---
+
 ## [v1.2.0] - 2026-08-18
 
 ### ⌨️ Global Hardware-Level Host Controls

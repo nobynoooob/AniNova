@@ -1847,14 +1847,17 @@ class JSApi:
     def _start_global_hotkeys(self, host) -> bool:
         """Start the system-wide global-hotkey listener for the host room.
 
-        Bindings come from settings. The listener runs on its own daemon
-        thread (OS event loop) and only dispatches while a host room is
-        active. Returns True when the OS backend is live, False otherwise
-        (e.g. Wayland session, missing DISPLAY, unsupported platform).
+        Bindings come from settings. Startup happens asynchronously on a
+        detached daemon thread inside ``GlobalHotkeyManager``, so the GUI
+        bridge thread never performs blocking OS calls (X11 display connect,
+        key grabs, ...) — the "Host Room" click returns instantly. Returns
+        True when the listener has been requested to start (or is already
+        active); the live state is exposed through ``global_hotkeys_status()``.
         """
         try:
             if self._hotkeys is not None:
-                return bool(getattr(self._hotkeys, "active", False))
+                st = self._hotkeys.status()
+                return bool(st["active"] or st["starting"])
             from .global_hotkeys import GlobalHotkeyManager
             from .settings import SettingsManager
             s = SettingsManager()
@@ -1868,15 +1871,16 @@ class JSApi:
                 "prev_episode": s.get("global_hotkey_prev_episode", "ctrl+alt+down"),
             }
             mgr = GlobalHotkeyManager(bindings, self._on_global_hotkey)
-            mgr.start()
+            started = mgr.start()
             self._hotkeys = mgr
-            if not mgr.active and mgr.error:
+            st = mgr.status()
+            if not st["starting"] and not st["active"] and st["error"]:
                 try:
                     from .monitoring import monitor
-                    monitor.track_error("Global hotkeys unavailable", {"reason": mgr.error})
+                    monitor.track_error("Global hotkeys unavailable", {"reason": st["error"]})
                 except Exception:
                     pass
-            return bool(mgr.active)
+            return started
         except Exception:
             return False
 
@@ -1959,12 +1963,14 @@ class JSApi:
     def global_hotkeys_status(self) -> Dict:
         """Current global-hotkey backend state for the status bar."""
         if self._hotkeys is not None:
+            st = self._hotkeys.status()
             return {
                 "enabled": True,
-                "active": bool(getattr(self._hotkeys, "active", False)),
-                "error": str(getattr(self._hotkeys, "error", "") or ""),
+                "active": bool(st["active"]),
+                "starting": bool(st["starting"]),
+                "error": str(st["error"] or ""),
             }
-        return {"enabled": False, "active": False, "error": ""}
+        return {"enabled": False, "active": False, "starting": False, "error": ""}
     @staticmethod
     def _is_usable_stream(result) -> bool:
         """A stream dict is usable only when it carries a real media URL."""
