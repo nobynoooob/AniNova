@@ -1552,13 +1552,43 @@ class JSApi:
         # app's custom keyboard hotkeys (enforced on the native mpv window).
         aspect = None
         custom_hotkeys = False
+        auto_skip_enabled = True
+        auto_skip_osd = True
         try:
             from .settings import SettingsManager
             _settings = SettingsManager()
             aspect = str(_settings.get("mpv_aspect_ratio", "auto") or "auto")
             custom_hotkeys = bool(_settings.get("mpv_custom_keys", True))
+            auto_skip_enabled = bool(_settings.get("auto_skip_enabled", True))
+            auto_skip_osd = bool(_settings.get("auto_skip_osd", True))
         except Exception:
             pass
+
+        # Automated Skip-Intro/Outro: silently prefetch the AniSkip timestamps
+        # in the background (zero launch latency) and arm the mpv monitor.
+        # English track only — AniSkip keys off AniList ids, which the Arabic
+        # pipeline never carries. When a Watch Together room is active the
+        # monitor's skip is announced to every guest via Protocol v2 EV_SEEK.
+        auto_skip = None
+        if player_choice == "mpv" and auto_skip_enabled and category != ARABIC_CATEGORY:
+            try:
+                ep_int = int(float(ep_num))
+            except (TypeError, ValueError):
+                ep_int = 0
+            if ep_int >= 1:
+                try:
+                    from .auto_skip import get_skip_times, prefetch_skip_times
+                    prefetch_skip_times(anime_id, ep_int)
+                    auto_skip = {
+                        "resolver": (lambda: get_skip_times(anime_id, ep_int)),
+                        "osd": auto_skip_osd,
+                    }
+                    if host is not None and getattr(host, "is_active", False):
+                        auto_skip["on_skip"] = (
+                            lambda target, label: host.notify_auto_skip(target, label)
+                        )
+                except Exception:
+                    auto_skip = None
 
         # Continue Watching: sample mpv time-pos/duration via IPC during playback
         # and persist progress after the player exits (best-effort).
@@ -1581,6 +1611,7 @@ class JSApi:
                 custom_hotkeys=custom_hotkeys,
                 progress_cb=_progress_cb,
                 resolution=resolution,
+                auto_skip=auto_skip,
             )
         except Exception as exc:
             if host is not None and getattr(host, "is_active", False):
@@ -1671,6 +1702,8 @@ class JSApi:
                 "default_quality": str(s.get("default_quality", "1080p") or "1080p"),
                 "mpv_aspect_ratio": str(s.get("mpv_aspect_ratio", "auto") or "auto"),
                 "mpv_custom_keys": bool(s.get("mpv_custom_keys", True)),
+                "auto_skip_enabled": bool(s.get("auto_skip_enabled", True)),
+                "auto_skip_osd": bool(s.get("auto_skip_osd", True)),
             }
         except Exception:
             return {
@@ -1680,6 +1713,8 @@ class JSApi:
                 "default_quality": "1080p",
                 "mpv_aspect_ratio": "auto",
                 "mpv_custom_keys": True,
+                "auto_skip_enabled": True,
+                "auto_skip_osd": True,
             }
 
     @staticmethod
@@ -1971,6 +2006,19 @@ class JSApi:
                 "error": str(st["error"] or ""),
             }
         return {"enabled": False, "active": False, "starting": False, "error": ""}
+
+    def auto_skip_status(self) -> Dict:
+        """Automated Skip-Intro/Outro state for the status bar."""
+        try:
+            from .settings import SettingsManager
+            s = SettingsManager()
+            return {
+                "enabled": bool(s.get("auto_skip_enabled", True)),
+                "osd": bool(s.get("auto_skip_osd", True)),
+            }
+        except Exception:
+            return {"enabled": True, "osd": True}
+
     @staticmethod
     def _is_usable_stream(result) -> bool:
         """A stream dict is usable only when it carries a real media URL."""

@@ -1384,6 +1384,7 @@
     <span class="dot"></span>
     <span id="wtText">Watch Together: offline</span>
     <span id="wtMembers" style="display:none"></span>
+    <span id="skipText">Auto-skip: on</span>
     <span class="spacer"></span>
     <button id="btnHost">Host Room</button>
     <button id="btnJoin">Join Room</button>
@@ -2658,6 +2659,17 @@ attachHoverMeta(card, r);
   }
   function refreshWt() { loadWtState().catch(() => {}); }
 
+  // Automated Skip-Intro/Outro status indicator (top bar).
+  async function refreshAutoSkip() {
+    const api = await getApi();
+    if (!api || !api.auto_skip_status) return;
+    try {
+      const st = await api.auto_skip_status();
+      const el = $("#skipText");
+      if (el) el.textContent = `Auto-skip: ${st && st.enabled ? "on" : "off"}`;
+    } catch (e) {}
+  }
+
   function renderTopBar(s, roster) {
     const bar = $("#wtBar");
     const dot = bar.querySelector(".dot");
@@ -2777,6 +2789,7 @@ attachHoverMeta(card, r);
   }
 
   refreshWt();
+  refreshAutoSkip();
   loadTrending();
   loadFeatured();
   loadTop10();

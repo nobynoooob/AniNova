@@ -8,6 +8,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/) conventions. This
 
 ## [Unreleased]
 
+---
+
+## [v1.3.0] - 2026-08-18
+
+### 🎬 Automated Skip-Intro/Outro
+- New `auto_skip.py` module: fetches OP/ED timestamps from the AniSkip community API (`api.aniskip.com/v2/skip-times`), caches them in a bounded thread-safe LRU (`SkipCache`, 256 entries), and prefetches them on a background daemon thread at play time — zero launch latency.
+- `AutoSkipMonitor` (daemon thread) samples the host mpv `time-pos` over the room socket every 0.5 s, auto-seeks past the opening/ending once it crosses the skip window (1.5 s trigger window, re-arms after the interval or an intentional rewind before it), and flashes an mpv OSD ("Skipped Opening/Ending"). Intervals are resolved lazily, so a late-arriving fetch still lands mid-playback; the monitor self-exits when the player socket drops.
+- English track only (AniSkip keys off AniList ids the Arabic pipeline never carries), mpv only, gated by `player_choice == "mpv"` and `category != "ar_sub"`. New settings: `auto_skip_enabled=True`, `auto_skip_osd=True` (exposed via `get_settings` + `auto_skip_status()`); status indicator `#skipText` in the top bar.
+- Watch Together: the host's auto-skip announces to every guest via `WatchHost.notify_auto_skip()` — a Protocol v2 `EV_SEEK` broadcast that mirrors a manual seek exactly (guests seek in sync, sync-loop caches updated under `_sync_lock`, no double-broadcast, no new protocol surface).
+
 ### ⚡ Global Hotkeys — UI freeze fix + crash guards
 - **Async startup**: `GlobalHotkeyManager.start()` now only does cheap local checks on the caller and runs the full backend setup (X11 display connect, key grabs, `RegisterHotKey`, Carbon) on a fully detached daemon thread. The "Host Room" click no longer blocks on the GUI/bridge thread — no more "Application is not responding", even if the X server is slow or unreachable.
 - `start()` returns once startup is *initiated*; live state is reported via `status()` (`starting`/`active`/`inactive`) and surfaced in the UI through `global_hotkeys_status()` (`starting` flag added). `stop()` is safe to call mid-startup.

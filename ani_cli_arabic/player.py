@@ -532,7 +532,7 @@ class PlayerManager:
                 print(detail, file=sys.stderr)
                 input("Press Enter to continue...")
 
-    def _play_mpv(self, url: str, title: str, mpv_path: str = None, headers: dict = None, ipc_socket: Optional[str] = None, subtitles: Optional[list] = None, aspect: Optional[str] = None, custom_hotkeys: bool = False, progress_cb=None):
+    def _play_mpv(self, url: str, title: str, mpv_path: str = None, headers: dict = None, ipc_socket: Optional[str] = None, subtitles: Optional[list] = None, aspect: Optional[str] = None, custom_hotkeys: bool = False, progress_cb=None, auto_skip: Optional[dict] = None):
         if not mpv_path:
             mpv_path = self.get_available_players().get('MPV')
 
@@ -580,8 +580,11 @@ class PlayerManager:
         )
         self._last_proc = proc
         poller = None
+        monitor = None
         if progress_cb is not None:
             poller = self._start_progress_poller(progress_client, progress_socket, proc, progress_cb)
+        if auto_skip and progress_socket:
+            monitor = self._start_auto_skip(progress_socket, auto_skip)
         try:
             result = proc.wait()
         finally:
@@ -589,6 +592,11 @@ class PlayerManager:
         if poller is not None:
             try:
                 poller.join(timeout=2.0)
+            except Exception:
+                pass
+        if monitor is not None:
+            try:
+                monitor.join(timeout=3.0)
             except Exception:
                 pass
         if progress_client is not None:
@@ -760,6 +768,27 @@ class PlayerManager:
         except Exception:
             return None
 
+    def _start_auto_skip(self, ipc_socket, auto_skip: dict):
+        """Start the Automated Skip-Intro/Outro monitor on a daemon thread.
+
+        ``auto_skip`` is a config dict: ``{"resolver": callable, "on_skip":
+        callable|None, "osd": bool}``. Best-effort; never raises. Returns the
+        monitor thread (or None when IPC/auto-skip is unavailable)."""
+        try:
+            if not ipc_socket or not auto_skip:
+                return None
+            from .auto_skip import AutoSkipMonitor
+            monitor = AutoSkipMonitor(
+                str(ipc_socket),
+                resolver=auto_skip.get("resolver"),
+                on_skip=auto_skip.get("on_skip"),
+                osd=bool(auto_skip.get("osd", True)),
+            )
+            monitor.start()
+            return monitor
+        except Exception:
+            return None
+
     def _mpv_progress_loop(self, ipc_client, proc, progress_cb):
         """Poll mpv position/duration until the process exits."""
         try:
@@ -796,6 +825,7 @@ class PlayerManager:
         custom_hotkeys: bool = False,
         progress_cb=None,
         resolution: Optional[str] = None,
+        auto_skip: Optional[dict] = None,
     ):
         """Play ``url`` with the chosen player and, for mpv + HLS master
         playlists, auto-downgrade the quality once when the initial stream
@@ -840,7 +870,7 @@ class PlayerManager:
             return self._play_mpv(
                 url, title, mpv_path, headers, ipc_socket=ipc_socket,
                 subtitles=subtitles, aspect=aspect, custom_hotkeys=custom_hotkeys,
-                progress_cb=progress_cb,
+                progress_cb=progress_cb, auto_skip=auto_skip,
             )
 
         # Build the watchdog IPC client up front so a Windows TCP fallback can
@@ -891,8 +921,11 @@ class PlayerManager:
                         pass
                     continue
             poller = None
+            monitor = None
             if progress_cb is not None:
                 poller = self._start_progress_poller(ipc_client, ipc_arg, proc, progress_cb)
+            if auto_skip and ipc_arg:
+                monitor = self._start_auto_skip(ipc_arg, auto_skip)
             try:
                 result = proc.wait()
             finally:
@@ -900,6 +933,11 @@ class PlayerManager:
             if poller is not None:
                 try:
                     poller.join(timeout=2.0)
+                except Exception:
+                    pass
+            if monitor is not None:
+                try:
+                    monitor.join(timeout=3.0)
                 except Exception:
                     pass
             if result != 0:

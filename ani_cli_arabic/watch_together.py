@@ -1003,6 +1003,33 @@ class WatchHost:
             pass
         return {"ok": False, "error": "Player IPC unavailable"}
 
+    def notify_auto_skip(self, target: float, label: str = "op"):
+        """Announce an automated OP/ED skip to every guest (Protocol v2).
+
+        Called by the AutoSkipMonitor after it seeked the host player. This
+        only broadcasts the new time so guests seek in sync and updates the
+        sync-loop caches so the loop never double-broadcasts the same jump.
+        Mirrors a manual seek exactly (``EV_SEEK``), keeping guests perfectly
+        in sync with zero extra protocol surface.
+        """
+        if not self._active or self._channel is None:
+            return
+        try:
+            target = float(target)
+        except (TypeError, ValueError):
+            return
+        try:
+            self._broadcast(EV_SEEK, {"time": target})
+            with self._sync_lock:
+                self._last_broadcast_seek_time = target
+                self._last_polled_time = target
+            if label == "ed":
+                self._osd(f"Skipped Ending — {int(target)}s")
+            else:
+                self._osd(f"Skipped Opening — {int(target)}s")
+        except Exception:
+            pass
+
     def _reconnect_ipc(self) -> bool:
         """Reconnect a dropped IPC socket, retrying for up to
         RECONNECT_TIMEOUT seconds."""

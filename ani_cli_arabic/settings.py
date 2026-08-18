@@ -38,6 +38,8 @@ class SettingsManager:
             "global_hotkey_next_episode": "ctrl+alt+up",
             "global_hotkey_prev_episode": "ctrl+alt+down",
             "global_skip_seconds": 10,
+            "auto_skip_enabled": True,
+            "auto_skip_osd": True,
         }
         
         if not self.config_file.exists():
