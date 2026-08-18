@@ -58,7 +58,13 @@
 - Uses `api.py` endpoints and `get_streaming_servers()` / `build_mediafire_url()` for quality selection
 - Kept strictly separated from English code — English and Arabic provider loops must never mix or cross-fallback
 
-## Watch Together players
+## Watch Together (Host-is-King protocol v2)
+- Transport: Supabase Realtime Broadcast on `room:<code>` (public relay, no NAT issues). Protocol v2 (`PROTOCOL_VERSION=2`) hardens the layer on top: every host message is stamped with a monotonic `seq`, sender clock `ts`, and a media-generation `epoch`.
+- **Host is the single source of truth.** Guests are pure mirrors: launched with `lock_controls=True` (mpv `--no-input-default-bindings` / VLC unbound hotkeys) and a per-poll `_enforce_authority()` pass re-asserts the last host pause state (overrides any local pause/seek unless the host granted `CONTROL`).
+- **`seq`** dedupes/orders host broadcasts (guests drop `seq <= last_seen`). **`epoch`** is bumped on every `notify_load`; guests discard stale in-flight resolution/launch work from older epochs (a slow fetch can't clobber the new episode). **`ts`** feeds latency compensation.
+- The heartbeat is an **authoritative snapshot** (media + time + playing + epoch), so guests self-heal even if a discrete PLAY/PAUSE/SEEK/LOAD is dropped. Media is shared by broadcasting the **host's resolved stream URL + headers** — guests launch the same source instantly, no duplicate scraping.
+- **Seamless next/prev**: `play_episode` (host) kills the previous host player before relaunching (frees the room IPC socket / rc port) and captures `host._session`. The stale, still-blocked earlier `play_episode` releases and calls `notify_stop(session=old)` which is **ignored** (`notify_stop` is session-gated). `EV_STOP` is broadcast only on real session end; guests tear down via `_handle_stop`.
+- Event set: `LOAD_MEDIA`, `PLAY`, `PAUSE`, `SEEK`, `HEARTBEAT`, `JOIN`, `LEAVE`, `STATE`, `MEMBERS`, `STATUS`, `KICK`, `CONTROL`, `TRANSFER_HOST`, `STOP`.
 - Host and guest each pick mpv or VLC at session start (in `gui.py`, respects `settings.player` default).
 - mpv host: `MpvIpcClient` on a unique Unix socket (`_unique_socket_path`). VLC host: `VlcIpcClient` over TCP on a free loopback port (`_pick_free_port`, range 42000-43000), selected before launch.
 - VLC is launched with `--extraintf=rc --rc-host=127.0.0.1:<PORT>` (host, keeps Qt GUI) or `--intf=rc` is NOT used — guests use the same `--extraintf=rc` launch plus unbind hotkeys.

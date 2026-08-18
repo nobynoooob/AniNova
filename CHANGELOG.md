@@ -6,6 +6,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/) conventions. This
 
 ---
 
+## [Unreleased]
+
+### 🔒 Watch Together — Host-is-King protocol v2
+- Every host broadcast is stamped with a monotonic `seq`, sender clock `ts`, and media `epoch`; guests drop stale/duplicate messages (`seq <= last_seen`) and stale-epoch media work.
+- New per-poll `_enforce_authority()` pass: guests re-assert the last host pause state between heartbeats, so any local pause/seek is immediately overridden (host is the absolute source of truth).
+- The host heartbeat is now an authoritative snapshot (media + time + playing + epoch), so guests self-heal even when a discrete PLAY/PAUSE/SEEK/LOAD is dropped.
+- Seamless next/prev transitions: `epoch` bumps on every load and stale in-flight resolution/launch work from older episodes is discarded (a slow fetch can no longer clobber the current episode); the host kills its previous player before relaunching so the room IPC socket / rc port is always free.
+- Session-gated `notify_stop(session=...)`: a stale stop from a superseded play call can no longer tear down a newer episode.
+- New `STOP` event: guests tear down their player cleanly when the host ends playback.
+
+---
+
 ## [v1.9.5] - 2026-08-03 (Stable Release)
 
 Stable release consolidating the 1.9.5 alpha line.

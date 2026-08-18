@@ -1,4 +1,28 @@
-"""Watch Together room sync via Supabase Realtime Broadcast + mpv IPC."""
+"""Watch Together room sync via Supabase Realtime Broadcast + mpv IPC.
+
+Host-is-King protocol (v2)
+--------------------------
+The host is the single source of truth for playback state; guests are
+read-only mirrors that never dictate room state. Every host broadcast is
+stamped with a monotonic ``seq``, a sender clock ``ts`` and a media
+``epoch``:
+
+* ``seq``    - per-host monotonic counter. Guests drop any message with
+               ``seq <= last_seen`` (dedupe + ordering), so a duplicated or
+               out-of-order broadcast can never fight a newer one.
+* ``epoch``  - media generation, bumped on every new episode load. Guests
+               discard stale in-flight resolution/launch work belonging to an
+               older epoch, so a slow fetch from a previous episode can never
+               clobber the current one (seamless next/prev transitions).
+* ``ts``     - sender wall clock, used for latency compensation.
+
+The periodic host heartbeat is an authoritative *snapshot* (media + time +
+playing), so even when a discrete PLAY/PAUSE/SEEK/LOAD event is dropped the
+guests self-heal to the host state on the next beat. Guest players launch
+with controls locked (mpv ``--no-input-default-bindings`` / VLC unbound
+hotkeys) and a per-poll enforcement pass re-asserts the last host pause/seek
+state, so any local interference is immediately overridden.
+"""
 
 import asyncio
 import atexit
@@ -21,6 +45,7 @@ from .player import PlayerManager
 
 ROOM_CODE_LEN = 6
 MAX_MEMBERS = 8
+PROTOCOL_VERSION = 2
 HEARTBEAT_INTERVAL = 3.0
 DRIFT_THRESHOLD = 1.5
 SYNC_HARD_SEEK_THRESHOLD = 2.5
@@ -55,6 +80,7 @@ EV_STATUS = "STATUS"
 EV_KICK = "KICK"
 EV_CONTROL = "CONTROL"
 EV_TRANSFER = "TRANSFER_HOST"
+EV_STOP = "STOP"
 
 
 def _os_username() -> str:
@@ -234,7 +260,7 @@ class SupabaseRealtime:
                     pass
             return handler
 
-        for evt in (EV_LOAD, EV_PLAY, EV_PAUSE, EV_SEEK, EV_HEARTBEAT, EV_JOIN, EV_LEAVE, EV_STATE, EV_MEMBERS, EV_STATUS, EV_KICK, EV_CONTROL, EV_TRANSFER):
+        for evt in (EV_LOAD, EV_PLAY, EV_PAUSE, EV_SEEK, EV_HEARTBEAT, EV_JOIN, EV_LEAVE, EV_STATE, EV_MEMBERS, EV_STATUS, EV_KICK, EV_CONTROL, EV_TRANSFER, EV_STOP):
             try:
                 channel.on_broadcast(event=evt, callback=make_handler())
             except Exception:
@@ -681,6 +707,9 @@ class WatchHost:
         self._sync_thread: Optional[threading.Thread] = None
         self._active = False
         self._stopped = False
+        self._seq = 0
+        self._epoch = 0
+        self._session = 0
         self.username = _os_username()
         self.members: Dict[str, str] = {self.username: ROLE_HOST}
         self._member_status: Dict[str, dict] = {}
@@ -860,6 +889,10 @@ class WatchHost:
         try:
             data = dict(payload)
             data.setdefault("sender", SENDER_HOST)
+            self._seq += 1
+            data["seq"] = self._seq
+            data["ts"] = time.time()
+            data["proto"] = PROTOCOL_VERSION
             self._channel.send_broadcast(event, data)
         except Exception:
             pass
@@ -869,19 +902,24 @@ class WatchHost:
         payload["sender"] = SENDER_HOST
         payload["host"] = self.username
         payload["members"] = self._member_list()
+        payload.setdefault("epoch", self._epoch)
         payload.setdefault("time", self._ipc.get_time_pos() if self._ipc.connected else None)
         if self._ipc.connected:
             paused = self._ipc.get_pause()
             payload["playing"] = bool(paused is False)
         self._broadcast(EV_STATE, payload)
 
-    def notify_load(self, title: str, episode_num, language: str = "English Sub", url: str = "", headers: Optional[Dict[str, str]] = None):
+    def notify_load(self, title: str, episode_num, language: str = "English Sub", url: str = "", headers: Optional[Dict[str, str]] = None, resume_at: float = 0.0):
+        self._epoch += 1
+        self._session += 1
         self._current = {
             "title": title,
             "episode": str(episode_num),
             "language": language,
             "url": url or "",
             "headers": dict(headers) if headers else {},
+            "epoch": self._epoch,
+            "resume_at": float(resume_at or 0.0),
         }
         self._broadcast(EV_LOAD, self._current)
         self._osd(f"Now playing: {title} - Ep {episode_num}")
@@ -892,7 +930,17 @@ class WatchHost:
             )
             self._sync_thread.start()
 
-    def notify_stop(self):
+    def notify_stop(self, session: Optional[int] = None):
+        """End the current playback session.
+
+        ``session`` is the media session this call belongs to. A stale call
+        from a superseded ``play_episode`` (i.e. the host already started the
+        next episode) is ignored so a finished old player cannot tear down the
+        newer session. Without a session (best-effort cleanup) the stop is
+        always broadcast."""
+        if session is not None and session != self._session:
+            return
+        self._broadcast(EV_STOP, {})
         self._broadcast(EV_PAUSE, {})
         self._stop.set()
 
@@ -944,11 +992,13 @@ class WatchHost:
                     {
                         "time": time_pos,
                         "playing": bool(paused is False),
+                        "epoch": self._epoch,
                         "title": self._current.get("title", ""),
                         "episode": self._current.get("episode", ""),
                         "url": self._current.get("url", ""),
                         "language": self._current.get("language", "English Sub"),
                         "headers": self._current.get("headers", {}),
+                        "resume_at": float(self._current.get("resume_at") or 0.0),
                         "sent": time.time(),
                     },
                 )
@@ -1018,6 +1068,11 @@ class WatchGuest:
         self.username = _os_username()
         self.members: Dict[str, str] = {}
         self._controls_allowed = False
+        # --- Host-is-King protocol state ---
+        self._last_seq = 0
+        self._last_epoch = -1
+        self._host_cmd: Dict[str, Any] = {}
+        self._last_enforce_ts = 0.0
         atexit.register(self._atexit_cleanup)
 
     @property
@@ -1054,6 +1109,7 @@ class WatchGuest:
     def _monitor_loop(self):
         last_ping = 0.0
         last_status = 0.0
+        last_enforce = 0.0
         while not self._stop.is_set() and self._active:
             now = time.time()
             if now - last_ping >= HEARTBEAT_INTERVAL:
@@ -1065,6 +1121,9 @@ class WatchGuest:
             if now - last_status >= HEARTBEAT_INTERVAL:
                 self._report_status()
                 last_status = now
+            if now - last_enforce >= 1.0:
+                self._enforce_authority()
+                last_enforce = now
             time.sleep(POLL_INTERVAL)
 
     def _report_status(self):
@@ -1112,8 +1171,16 @@ class WatchGuest:
     def _on_message(self, message: dict):
         event = message.get("event")
         payload = message.get("payload") or {}
-        if payload.get("sender") != SENDER_HOST and event in (EV_LOAD, EV_PLAY, EV_PAUSE, EV_SEEK, EV_HEARTBEAT, EV_STATE, EV_MEMBERS, EV_KICK, EV_CONTROL, EV_TRANSFER):
+        if payload.get("sender") != SENDER_HOST and event in (EV_LOAD, EV_PLAY, EV_PAUSE, EV_SEEK, EV_HEARTBEAT, EV_STATE, EV_MEMBERS, EV_KICK, EV_CONTROL, EV_TRANSFER, EV_STOP):
             return
+        # Host-is-King ordering: drop stale/duplicate host broadcasts (the
+        # host stamps every message with a monotonic per-room sequence).
+        seq = payload.get("seq")
+        if isinstance(seq, (int, float)):
+            seq = int(seq)
+            if seq <= self._last_seq:
+                return
+            self._last_seq = seq
         if event == EV_LOAD:
             self._handle_load(payload)
         elif event == EV_PLAY:
@@ -1134,6 +1201,8 @@ class WatchGuest:
             self._handle_control(payload)
         elif event == EV_TRANSFER:
             self._handle_transfer(payload)
+        elif event == EV_STOP:
+            self._handle_stop(payload)
 
     def _handle_kick(self, payload: dict):
         name = str(payload.get("name") or "").strip()
@@ -1158,6 +1227,48 @@ class WatchGuest:
             self._osd("You are now the host")
         elif old_host == self.username:
             self._osd("You transferred the host role")
+
+    def _handle_stop(self, payload: dict):
+        """Host ended playback: tear down local media cleanly (kill the
+        player, clear pending state and the last host command) so guests do
+        not linger on a stopped stream."""
+        with self._state_lock:
+            self._pending = {}
+        self._host_cmd = {}
+        self._last_epoch = max(self._last_epoch, int(payload.get("epoch") or 0))
+        threading.Thread(target=self._stop_playback, daemon=True).start()
+        self._osd("Host stopped playback")
+
+    def _enforce_authority(self):
+        """Host-is-King override pass.
+
+        Between heartbeats the guest re-asserts the last authoritative host
+        playback state so any local pause/seek is immediately overridden.
+        Guests are pure mirrors unless the host explicitly granted them
+        control; this makes the guest immune to its own player's inputs
+        (a race between the hotkey lock and a granted-control window, an
+        unlocked player, or an OS-level shortcut)."""
+        if not self._host_cmd:
+            return
+        if self._controls_allowed:
+            return
+        if not self._ipc.connected:
+            return
+        want_playing = bool(self._host_cmd.get("playing"))
+        try:
+            paused = self._ipc.get_pause()
+        except Exception:
+            paused = None
+        if paused is None:
+            return
+        if want_playing and paused:
+            threading.Thread(
+                target=lambda: self._ipc.set_pause(False), daemon=True
+            ).start()
+        elif not want_playing and not paused:
+            threading.Thread(
+                target=lambda: self._ipc.set_pause(True), daemon=True
+            ).start()
 
     def _stop_playback(self):
         try:
@@ -1276,15 +1387,23 @@ class WatchGuest:
         return direct or "", {}, "arabic_api"
 
     def _handle_load(self, payload: dict):
+        epoch = int(payload.get("epoch") or 0)
+        if epoch < self._last_epoch:
+            return
+        self._last_epoch = epoch
         with self._state_lock:
             self._pending = dict(payload)
         if not self._has_active_media(payload):
             self._pending = {}
             return
         def worker():
+            if epoch < self._last_epoch:
+                return
             url = str(payload.get("url") or "")
             headers = dict(payload.get("headers") or {})
             if url:
+                if epoch < self._last_epoch:
+                    return
                 self._launch_player(url, headers)
                 self._pending = {}
                 return
@@ -1318,6 +1437,8 @@ class WatchGuest:
             if not url:
                 self._pending = {}
                 return
+            if epoch < self._last_epoch:
+                return
             self._launch_player(url, headers)
             self._pending = {}
 
@@ -1328,6 +1449,10 @@ class WatchGuest:
         Uses the host-provided stream URL if present, otherwise resolves.
         No player is launched from a background state sync when the host has
         not actually selected an episode yet."""
+        epoch = int(payload.get("epoch") or 0)
+        if epoch < self._last_epoch:
+            return
+        self._last_epoch = epoch
         with self._state_lock:
             self._pending = dict(payload)
         if not self._has_active_media(payload):
@@ -1350,6 +1475,8 @@ class WatchGuest:
             if not resolved_url:
                 self._pending = {}
                 return
+            if epoch < self._last_epoch:
+                return
             self._launch_player(resolved_url, resolved_headers)
             self._pending = {}
 
@@ -1359,6 +1486,10 @@ class WatchGuest:
         self._watch_start = time.time()
         with self._state_lock:
             self._watch_meta = dict(self._pending)
+        self._osd(
+            f"Now playing: {self._watch_meta.get('title', '')}"
+            f" - Ep {self._watch_meta.get('episode', '')}"
+        )
         try:
             from .monitoring import monitor
             monitor.set_activity(
@@ -1452,7 +1583,9 @@ class WatchGuest:
                 pending = dict(self._pending)
             if pending:
                 t = pending.get("time")
-                if t is not None:
+                if t is None:
+                    t = pending.get("resume_at")
+                if t is not None and float(t) > 0:
                     self._last_seek_ts = time.time()
                     self._apply_speed(1.0)
                     self._ipc.seek(float(t))
@@ -1485,6 +1618,11 @@ class WatchGuest:
         playing = payload.get("playing")
         if host_time is None:
             return
+        epoch = payload.get("epoch")
+        if isinstance(epoch, (int, float)):
+            if int(epoch) < self._last_epoch:
+                return
+            self._last_epoch = int(epoch)
         if playing is not None:
             self._last_host_playing = bool(playing)
         with self._state_lock:
@@ -1494,6 +1632,8 @@ class WatchGuest:
                     "playing": bool(playing is not False),
                 }
         self._last_host_time = float(host_time)
+        if playing is not None:
+            self._host_cmd["playing"] = bool(playing)
         if not self._ipc.connected:
             return
         if playing is False:

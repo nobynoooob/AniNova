@@ -1509,6 +1509,7 @@ class JSApi:
         # wins over the dropdown so the sync transport matches.
         ipc_socket = None
         rc_port = None
+        session = None
         if host is not None and getattr(host, "is_active", False):
             player_choice = getattr(host, "player_kind", "mpv") or "mpv"
             if player_choice == "vlc":
@@ -1521,6 +1522,15 @@ class JSApi:
                     self._watch_language_label(category),
                     url=url, headers=headers,
                 )
+                session = getattr(host, "_session", 0) or 0
+            except Exception:
+                pass
+            # Seamless next/prev: kill the previous host player so the room's
+            # IPC socket / rc port is free for the new process and any still
+            # blocked earlier play_episode returns. Its stale notify_stop is
+            # session-gated, so it can no longer tear down this new session.
+            try:
+                self._player_mgr().kill_active_player()
             except Exception:
                 pass
 
@@ -1561,7 +1571,7 @@ class JSApi:
         except Exception as exc:
             if host is not None and getattr(host, "is_active", False):
                 try:
-                    host.notify_stop()
+                    host.notify_stop(session=session)
                 except Exception:
                     pass
             return {"ok": False, "error": f"Failed to launch {player_choice}: {exc}"}
@@ -1582,7 +1592,7 @@ class JSApi:
 
         if host is not None and getattr(host, "is_active", False):
             try:
-                host.notify_stop()
+                host.notify_stop(session=session)
             except Exception:
                 pass
         return {"ok": True, "player": player_choice, "url": url}
