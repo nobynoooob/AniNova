@@ -718,6 +718,14 @@ class WatchHost:
         self._last_broadcast_pause: Optional[bool] = None
         self._last_polled_time: Optional[float] = None
         self._last_broadcast_seek_time: Optional[float] = None
+        # Polled-state snapshot published every sync-loop cycle so cooperating
+        # consumers (e.g. the AutoSkipMonitor in a host room) can observe mpv
+        # WITHOUT opening extra IPC connections / issuing duplicate commands.
+        # mpv dispatches IPC commands on a single thread; redundant pollers
+        # increase the chance a pause read times out under network stalls.
+        self._monitor_time: Optional[float] = None
+        self._monitor_pause: Optional[bool] = None
+        self._monitor_ts: float = 0.0
         self.username = _os_username()
         self.members: Dict[str, str] = {self.username: ROLE_HOST}
         self._member_status: Dict[str, dict] = {}
@@ -1030,6 +1038,15 @@ class WatchHost:
         except Exception:
             pass
 
+    def poll_state(self):
+        """Thread-safe snapshot of the last host-player state polled by the
+        sync loop: ``(time_pos, paused, timestamp)``. Co-sleepers (the
+        AutoSkipMonitor in a host room) read mpv state from here instead of
+        polling mpv themselves, so mpv's single-threaded IPC command queue is
+        not contended by redundant get_property requests."""
+        with self._sync_lock:
+            return (self._monitor_time, self._monitor_pause, self._monitor_ts)
+
     def _reconnect_ipc(self) -> bool:
         """Reconnect a dropped IPC socket, retrying for up to
         RECONNECT_TIMEOUT seconds."""
@@ -1056,10 +1073,21 @@ class WatchHost:
                 if not self._ipc.ping():
                     self._reconnect_ipc()
                 last_ping = now
-            time_pos = self._ipc.get_time_pos()
+            # Pause is read FIRST and retried once: it is the highest-priority
+            # state (guests must mirror a host pause immediately). A single
+            # mpv command-queue stall (network buffering, seeks) must never let
+            # a pause transition go unnoticed — that is what previously left
+            # guests playing while the host was paused.
             paused = self._ipc.get_pause()
+            if paused is None:
+                paused = self._ipc.get_pause()
+            time_pos = self._ipc.get_time_pos()
             now = time.time()
             with self._sync_lock:
+                # Publish the fresh poll for cooperating consumers.
+                self._monitor_time = time_pos
+                self._monitor_pause = paused
+                self._monitor_ts = now
                 last_pause = self._last_broadcast_pause
             if paused is not None and paused != last_pause:
                 self._broadcast(EV_PAUSE if paused else EV_PLAY, {})

@@ -1587,6 +1587,12 @@ class JSApi:
                         auto_skip["on_skip"] = (
                             lambda target, label: host.notify_auto_skip(target, label)
                         )
+                        # Host room: observe the host's already-polled state and
+                        # reuse its shared mpv client. The monitor then issues
+                        # ZERO extra get_property commands, so it never contends
+                        # with the sync loop for mpv's single-threaded IPC queue.
+                        auto_skip["state_source"] = host.poll_state
+                        auto_skip["ipc"] = getattr(host, "_ipc", None)
                 except Exception:
                     auto_skip = None
 

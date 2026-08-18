@@ -45,6 +45,17 @@ FETCH_TIMEOUT = 5.0
 TRIGGER_WINDOW = 1.5
 # mpv poll cadence (cheap local IPC round-trip, on a daemon thread).
 POLL_INTERVAL = 0.5
+# While the player is paused the monitor stops polling time-pos entirely and
+# only checks the pause flag at this relaxed cadence (it must not contend with
+# the Watch Host sync loop over mpv's single-threaded IPC command queue).
+PAUSED_POLL_INTERVAL = 1.5
+# Seconds after a triggered skip during which no further skip may fire. A hard
+# seek ("set_property time-pos") can report the pre-seek position briefly;
+# this cooldown prevents a double seek / double EV_SEEK broadcast.
+SKIP_COOLDOWN = 2.0
+# How old a Watch Host state snapshot may be before it is treated as stale
+# (room gone, player exited) and the monitor starts counting dead polls.
+SOURCE_STALE = 5.0
 # Number of consecutive failed polls (player gone) before the monitor exits.
 _MAX_DEAD_POLLS = 6
 
@@ -200,6 +211,19 @@ class AutoSkipMonitor:
     so a background fetch that lands mid-playback is picked up automatically.
     ``on_skip(target, label)`` is invoked right after the seek — Watch Together
     hosts use it to broadcast the new time so every guest skips in sync.
+
+    Two observation modes, to avoid fighting the Watch Host over mpv's
+    single-threaded IPC command queue:
+
+    * **Passive** (``state_source`` given, e.g. ``WatchHost.poll_state``): mpv
+      state is read from the source the host sync loop already maintains. The
+      monitor never issues get_property requests of its own and only uses the
+      IPC connection for the rare seek / OSD commands.
+    * **Active** (default, no ``state_source``): the monitor polls its own
+      client, but suspends time-pos polling entirely while the player is
+      paused (it only checks the pause flag at a relaxed cadence).
+
+    While paused, no skip can ever fire.
     """
 
     def __init__(
@@ -208,14 +232,17 @@ class AutoSkipMonitor:
         resolver: Optional[Callable[[], List[SkipInterval]]] = None,
         on_skip: Optional[Callable[[float, str], None]] = None,
         osd: bool = True,
+        state_source: Optional[Callable[[], Optional[Tuple]]] = None,
     ):
         self._owns_ipc = not isinstance(ipc, MpvIpcClient)
         self._ipc = ipc
         self._resolver = resolver
         self._on_skip = on_skip
         self._osd_enabled = bool(osd)
+        self._state_source = state_source
         self._intervals: List[SkipInterval] = []
         self._triggered: Dict[str, bool] = {}
+        self._skip_cooldown: float = 0.0
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self.skipped: List[dict] = []
@@ -233,6 +260,11 @@ class AutoSkipMonitor:
 
     def stop(self) -> None:
         self._stop.set()
+
+    def join(self, timeout: Optional[float] = None) -> None:
+        """Wait for the monitor thread to finish (best-effort)."""
+        if self._thread is not None:
+            self._thread.join(timeout=timeout)
 
     @property
     def is_alive(self) -> bool:
@@ -252,6 +284,7 @@ class AutoSkipMonitor:
         except Exception:
             return
         self._triggered[interval.skip_type] = True
+        self._skip_cooldown = time.time()
         self.skipped.append(
             {
                 "type": interval.skip_type,
@@ -280,32 +313,57 @@ class AutoSkipMonitor:
         last_pos: Optional[float] = None
         try:
             while not self._stop.is_set():
-                if not getattr(self._ipc, "connected", False):
-                    if not self._ipc.connect(timeout=2.0):
+                self._load_intervals()
+                if self._state_source is not None:
+                    # Passive mode: read the Watch Host's already-polled state.
+                    # No get_property requests are issued to mpv here.
+                    pos, paused = self._read_state_source()
+                    if pos is None:
                         dead_polls += 1
                         if dead_polls >= _MAX_DEAD_POLLS:
                             break
                         time.sleep(POLL_INTERVAL)
                         continue
-                self._load_intervals()
-                pos = None
-                try:
-                    pos = self._ipc.get_time_pos()
-                except Exception:
+                    dead_polls = 0
+                else:
+                    # Active mode: own the polling, but never fight mpv while
+                    # the player is paused — only the pause flag is checked at
+                    # a relaxed cadence (time-pos polling fully suspended).
+                    if not getattr(self._ipc, "connected", False):
+                        if not self._ipc.connect(timeout=2.0):
+                            dead_polls += 1
+                            if dead_polls >= _MAX_DEAD_POLLS:
+                                break
+                            time.sleep(POLL_INTERVAL)
+                            continue
+                    try:
+                        paused = self._ipc.get_pause()
+                    except Exception:
+                        paused = None
+                    if paused is True:
+                        last_pos = None
+                        dead_polls = 0
+                        time.sleep(PAUSED_POLL_INTERVAL)
+                        continue
                     pos = None
-                if pos is None:
-                    dead_polls += 1
-                    if dead_polls >= _MAX_DEAD_POLLS:
-                        break
-                    time.sleep(POLL_INTERVAL)
-                    continue
-                dead_polls = 0
-                paused = None
-                try:
-                    paused = self._ipc.get_pause()
-                except Exception:
-                    paused = None
+                    try:
+                        pos = self._ipc.get_time_pos()
+                    except Exception:
+                        pos = None
+                    if pos is None:
+                        dead_polls += 1
+                        if dead_polls >= _MAX_DEAD_POLLS:
+                            break
+                        time.sleep(POLL_INTERVAL)
+                        continue
+                    dead_polls = 0
                 if paused is True:
+                    # Suspended while paused (both modes) — never skip, never
+                    # probe time-pos, just wait for playback to resume.
+                    last_pos = None
+                    time.sleep(PAUSED_POLL_INTERVAL)
+                    continue
+                if time.time() - self._skip_cooldown < SKIP_COOLDOWN:
                     last_pos = pos
                     time.sleep(POLL_INTERVAL)
                     continue
@@ -327,3 +385,23 @@ class AutoSkipMonitor:
                     self._ipc.close()
                 except Exception:
                     pass
+
+    def _read_state_source(self) -> Tuple[Optional[float], Optional[bool]]:
+        """Read ``(time_pos, paused)`` from the passive state source.
+
+        Returns ``(None, None)`` when the source is missing, errored, or stale
+        (the room's player has exited or the snapshot stopped updating), so the
+        caller counts a dead poll and eventually exits."""
+        src = None
+        if self._state_source is not None:
+            try:
+                src = self._state_source()
+            except Exception:
+                src = None
+        if not src or len(src) < 3:
+            return None, None
+        pos = src[0]
+        ts = src[2]
+        if pos is None or (time.time() - float(ts or 0.0)) > SOURCE_STALE:
+            return None, None
+        return float(pos), (bool(src[1]) if src[1] is not None else None)

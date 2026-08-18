@@ -10,6 +10,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/) conventions. This
 
 ---
 
+## [v1.3.1] - 2026-08-18
+
+### 🔧 Auto-Skip vs. Watch Together — IPC polling collision fix
+- **Root cause**: mpv dispatches IPC commands on a single thread. The v1.3.0 `AutoSkipMonitor` opened its own socket and polled `time-pos`/`pause` every 0.5 s *in parallel with* the Watch Host sync loop. Under network stalls (HLS buffering, hard seeks) the extra commands could starve the host's `get_pause()` read, so a host pause transition was missed and guests kept playing — the room fell out of sync.
+- **Centralized polling (host rooms)**: the monitor is now **passive** — it reads `(time_pos, paused, ts)` from the snapshot the host sync loop already publishes (`WatchHost.poll_state()`, updated under `_sync_lock`) and reuses the host's shared `MpvIpcClient` for its rare seek/OSD. It issues **zero** `get_property` commands of its own, restoring the pre-v1.3.0 IPC traffic level exactly.
+- **Pause broadcast hardened**: `_sync_loop` now reads `pause` **first** and retries it once before reading `time-pos`, so a pause transition is captured even if the command queue is momentarily backed up.
+- **Suspend on pause**: in standalone (non-room) playback the active monitor **fully suspends time-pos polling while paused**, checking only the pause flag at a relaxed 1.5 s cadence; no skip can ever fire while paused.
+- **Skip cooldown**: a 2.0 s cooldown after each skip prevents a double seek / double `EV_SEEK` broadcast when a hard seek briefly reports the pre-seek position.
+- Empirically verified against real mpv: concurrent multi-client polling causes no drops, and the passive monitor + real `_sync_loop` skip, pause-broadcast, and resume-broadcast correctly.
+
+---
+
 ## [v1.3.0] - 2026-08-18
 
 ### 🎬 Automated Skip-Intro/Outro

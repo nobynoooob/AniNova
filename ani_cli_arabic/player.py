@@ -596,6 +596,10 @@ class PlayerManager:
                 pass
         if monitor is not None:
             try:
+                monitor.stop()
+            except Exception:
+                pass
+            try:
                 monitor.join(timeout=3.0)
             except Exception:
                 pass
@@ -772,17 +776,28 @@ class PlayerManager:
         """Start the Automated Skip-Intro/Outro monitor on a daemon thread.
 
         ``auto_skip`` is a config dict: ``{"resolver": callable, "on_skip":
-        callable|None, "osd": bool}``. Best-effort; never raises. Returns the
-        monitor thread (or None when IPC/auto-skip is unavailable)."""
+        callable|None, "osd": bool, "ipc": MpvIpcClient|None,
+        "state_source": callable|None}``. When a Watch Together host room is
+        active, ``ipc`` is the host's shared mpv client and ``state_source``
+        the host's ``poll_state`` — the monitor then performs ZERO redundant
+        mpv polling, so it never contends with the host sync loop for mpv's
+        single-threaded IPC command queue. Best-effort; never raises. Returns
+        the monitor thread (or None when unavailable)."""
         try:
-            if not ipc_socket or not auto_skip:
+            if not auto_skip:
                 return None
+            ipc = auto_skip.get("ipc")
+            if ipc is None:
+                if not ipc_socket:
+                    return None
+                ipc = str(ipc_socket)
             from .auto_skip import AutoSkipMonitor
             monitor = AutoSkipMonitor(
-                str(ipc_socket),
+                ipc,
                 resolver=auto_skip.get("resolver"),
                 on_skip=auto_skip.get("on_skip"),
                 osd=bool(auto_skip.get("osd", True)),
+                state_source=auto_skip.get("state_source"),
             )
             monitor.start()
             return monitor
@@ -936,6 +951,10 @@ class PlayerManager:
                 except Exception:
                     pass
             if monitor is not None:
+                try:
+                    monitor.stop()
+                except Exception:
+                    pass
                 try:
                     monitor.join(timeout=3.0)
                 except Exception:
