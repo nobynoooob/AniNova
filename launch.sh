@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Easy launcher for the ani-cli-arabic desktop GUI.
+# Easy launcher for the AniNova desktop GUI.
 # Detects an active virtualenv (venv/ or .venv/) and runs the pywebview app.
 set -euo pipefail
 cd "$(dirname "$0")"

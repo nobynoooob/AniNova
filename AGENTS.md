@@ -122,11 +122,11 @@
 ## Packaging / releases
 - `build_desktop.py --target gui` builds the windowed PyWebView executable with `ui/` assets. `--exclude-module` adds exclusions, `--onedir` produces a portable folder, `--bundle-mpv` embeds mpv, `--zip` produces `dist/<exe>.zip`.
 - Release binaries do **NOT** bundle the Playwright Chromium browser (that bloated old builds to 430 MB). The Playwright driver is still bundled via `--collect-all playwright`; on first stream use `playwright_bootstrap.ensure_playwright_chromium` downloads Chromium into the user's ms-playwright cache.
-- `.github/workflows/build.yml` runs `build-gui` (windows/linux) plus a `release` job that uploads the AniNova assets. Windows bundles mpv; Linux relies on system mpv.
+- `.github/workflows/build.yml` runs `build-gui` (windows/linux) plus a `release` job that uploads the AniNova assets. Windows bundles mpv; Linux relies on system mpv. Both platforms build with `--exe-name AniNova`; the Linux release asset is `AniNova-v<version>-Linux.tar.gz` (exe + `aninova.desktop` + `install.sh`), the Windows one `AniNova-v<version>-Windows-Portable.zip`.
 
 ## Version / packaging
 - Single source of version: `ani_cli_arabic/version.py:__version__`
-- GUI package entry points: `ani-cli-ar-gui` / `aninova` (both `ani_cli_arabic.gui:main`)
+- GUI package entry points: `ani-cli-ar-gui` / `aninova` (both `ani_cli_arabic.gui:main`); the frozen executable is named `AniNova`.
 - Desktop releases via `build_desktop.py` + `.github/workflows/build.yml` (GitHub Actions)
 
 ## Conventions

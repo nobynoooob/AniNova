@@ -18,6 +18,7 @@
     --accent-2: #feb47b;
     --sunrise: linear-gradient(135deg, #ff7e5f, #feb47b);
     --sunrise-soft: rgba(255, 126, 95, .14);
+    --sunrise-border: rgba(255, 126, 95, .4);
     --success: #2fd07b;
     --warn: #ffb454;
     --danger: #ff5f6e;
@@ -890,7 +891,7 @@
     text-transform: capitalize;
   }
   .genres-row { display: flex; gap: 8px; flex-wrap: wrap; }
-  .genres-row .pill { background: var(--sunrise-soft); border-color: rgba(255, 126, 95, .4); }
+  .genres-row .pill { background: var(--sunrise-soft); border-color: var(--sunrise-border); }
 
   /* --- center: player launch area --- */
   .play-launch {
@@ -1350,6 +1351,153 @@
   }
   .card .bookmark-ic:hover { background: var(--accent); }
   .card .bookmark-ic.active { background: var(--accent); color: #fff; }
+
+  /* ---------- settings modal ---------- */
+  .set-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 130;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, .6);
+    backdrop-filter: blur(4px);
+  }
+  .set-modal.show { display: flex; }
+  .set-card {
+    width: min(600px, 94vw);
+    max-height: 88vh;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    box-shadow: var(--shadow);
+    padding: 20px;
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+  }
+  .set-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    flex: 0 0 auto;
+  }
+  .set-title {
+    font-size: 18px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .set-title .set-ic {
+    width: 30px; height: 30px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+    background: var(--sunrise);
+    color: #fff;
+    font-size: 14px;
+  }
+  .set-close {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-size: 18px;
+    padding: 4px 8px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .set-close:hover { color: var(--text); background: var(--panel); }
+  .set-scroll {
+    overflow-y: auto;
+    margin: 10px -4px 0 0;
+    padding-right: 4px;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .set-section {
+    margin-bottom: 18px;
+  }
+  .set-section-title {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--accent-2);
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border-soft);
+    margin-bottom: 10px;
+  }
+  .set-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 8px 0;
+  }
+  .set-row + .set-row { border-top: 1px solid var(--border-soft); }
+  .set-label { flex: 1 1 auto; min-width: 0; }
+  .set-label .set-name { font-size: 13.5px; font-weight: 600; }
+  .set-label .set-desc { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  .set-field { flex: 0 0 auto; }
+  .set-field select,
+  .set-field input[type="text"],
+  .set-field input[type="number"] {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 7px 10px;
+    font-size: 13px;
+    outline: none;
+    min-width: 150px;
+    width: auto;
+    transition: border-color .15s;
+  }
+  .set-field select:focus,
+  .set-field input:focus { border-color: var(--accent); }
+  .set-field input[type="text"] { min-width: 210px; }
+  .set-field input[type="number"] { min-width: 90px; }
+  .set-field .hotkey-hint { font-size: 10.5px; color: var(--muted); margin-top: 3px; }
+  .switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+    flex: 0 0 auto;
+  }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch .slider {
+    position: absolute;
+    inset: 0;
+    cursor: pointer;
+    background: var(--border);
+    border-radius: 24px;
+    transition: background .2s;
+  }
+  .switch .slider::before {
+    content: "";
+    position: absolute;
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    top: 3px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform .2s;
+  }
+  .switch input:checked + .slider { background: var(--accent); }
+  .switch input:checked + .slider::before { transform: translateX(20px); }
+  .set-actions {
+    display: flex;
+    gap: 10px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-soft);
+    flex: 0 0 auto;
+  }
+  .set-actions button { flex: 1; }
+  .set-actions .btn-reset { background: transparent; border-color: var(--danger); color: var(--danger); }
+  .set-actions .btn-reset:hover { background: rgba(255, 95, 110, .12); }
 </style>
 </head>
 <body>
@@ -1368,6 +1516,7 @@
     </div>
     <div class="nav-end">
       <span class="version" id="version">loading…</span>
+      <button class="icon-btn" id="btnSettings" title="Settings">⚙</button>
       <button class="icon-btn" id="btnNotif" title="Notifications"><span style="position:relative">🔔<span class="badge"></span></span></button>
       <button class="avatar" id="btnProfile" title="Profile">AR</button>
     </div>
@@ -1560,6 +1709,275 @@
     </div>
   </div>
 
+  <!-- ================= SETTINGS MENU ================= -->
+  <div class="set-modal" id="settingsModal">
+    <div class="set-card">
+      <div class="set-head">
+        <div class="set-title"><span class="set-ic">⚙</span> Settings</div>
+        <button class="set-close" id="setModalClose" title="Close">✕</button>
+      </div>
+      <div class="set-scroll">
+        <div class="set-section">
+          <div class="set-section-title">Playback</div>
+          <div class="set-row">
+            <div class="set-label">
+              <div class="set-name">Default quality</div>
+              <div class="set-desc">Used when auto-detect can't pick a stream, and as the base for Arabic tracks.</div>
+            </div>
+            <div class="set-field">
+              <select id="setDefaultQuality">
+                <option value="auto">Auto</option><option value="1080p">1080p</option>
+                <option value="720p">720p</option><option value="480p">480p</option>
+                <option value="360p">360p</option><option value="best">Best</option>
+              </select>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-label">
+              <div class="set-name">Aspect ratio override</div>
+              <div class="set-desc">Forces mpv to render at this ratio. Auto keeps the source aspect.</div>
+            </div>
+            <div class="set-field">
+              <select id="setAspectRatio">
+                <option value="auto">Auto</option><option value="16:9">16:9</option>
+                <option value="4:3">4:3</option><option value="21:9">21:9</option>
+                <option value="2.35:1">2.35:1</option><option value="-1">Original</option>
+              </select>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-label">
+              <div class="set-name">Custom player hotkeys</div>
+              <div class="set-desc">Enables AniNova's tuned keybindings on the native mpv window.</div>
+            </div>
+            <div class="set-field">
+              <label class="switch"><input type="checkbox" id="setCustomKeys"><span class="slider"></span></label>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-label">
+              <div class="set-name">Auto-play next episode</div>
+              <div class="set-desc">Continues to the next episode when playback finishes.</div>
+            </div>
+            <div class="set-field">
+              <label class="switch"><input type="checkbox" id="setAutoNext"><span class="slider"></span></label>
+            </div>
+          </div>
+        </div>
+
+        <div class="set-section">
+          <div class="set-section-title">Auto-Skip</div>
+          <div class="set-row">
+            <div class="set-label">
+              <div class="set-name">Skip intros / outros</div>
+              <div class="set-desc">Auto-seeks past opening &amp; ending themes using the AniSkip database (English track).</div>
+            </div>
+            <div class="set-field">
+              <label class="switch"><input type="checkbox" id="setAutoSkipEnabled"><span class="slider"></span></label>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-label">
+              <div class="set-name">Skip on-screen message</div>
+              <div class="set-desc">Show a small player notification when an intro/outro is skipped.</div>
+            </div>
+            <div class="set-field">
+              <label class="switch"><input type="checkbox" id="setAutoSkipOsd"><span class="slider"></span></label>
+            </div>
+          </div>
+        </div>
+
+        <div class="set-section">
+          <div class="set-section-title">Pre-Roll</div>
+          <div class="set-row">
+            <div class="set-label">
+              <div class="set-name">Pre-roll buffer</div>
+              <div class="set-desc">Show a countdown buffer (or configured ad video) before playback starts.</div>
+            </div>
+            <div class="set-field">
+              <label class="switch"><input type="checkbox" id="setPrerollEnabled"><span class="slider"></span></label>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-label">
+              <div class="set-name">Pre-roll video URL</div>
+              <div class="set-desc">Optional video (mp4/webm) played during the buffer. Empty = branded countdown.</div>
+            </div>
+            <div class="set-field"><input type="text" id="setPrerollUrl" placeholder="https://…/ad.mp4"></div>
+          </div>
+          <div class="set-row">
+            <div class="set-label">
+              <div class="set-name">Pre-roll seconds</div>
+              <div class="set-desc">Buffer length (1–120 seconds).</div>
+            </div>
+            <div class="set-field"><input type="number" id="setPrerollSeconds" min="1" max="120" step="1"></div>
+          </div>
+        </div>
+
+        <div class="set-section">
+          <div class="set-section-title">Watch Together &amp; Hotkeys</div>
+          <div class="set-row">
+            <div class="set-label">
+              <div class="set-name">System-wide hotkeys</div>
+              <div class="set-desc">Global play/pause &amp; seek while hosting a room.</div>
+            </div>
+            <div class="set-field">
+              <label class="switch"><input type="checkbox" id="setHotkeysEnabled"><span class="slider"></span></label>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-label">
+              <div class="set-name">Hotkey seek step</div>
+              <div class="set-desc">Seconds skipped per seek-hotkey press (1–300).</div>
+            </div>
+            <div class="set-field"><input type="number" id="setSkipSeconds" min="1" max="300" step="1"></div>
+          </div>
+          <div class="set-row">
+            <div class="set-label"><div class="set-name">Play / Pause</div></div>
+            <div class="set-field"><input type="text" id="setHotkeyPlayPause" spellcheck="false">
+              <div class="hotkey-hint">Format: ctrl+alt+p</div></div>
+          </div>
+          <div class="set-row">
+            <div class="set-label"><div class="set-name">Seek forward</div></div>
+            <div class="set-field"><input type="text" id="setHotkeySeekFwd" spellcheck="false">
+              <div class="hotkey-hint">Format: ctrl+alt+right</div></div>
+          </div>
+          <div class="set-row">
+            <div class="set-label"><div class="set-name">Seek backward</div></div>
+            <div class="set-field"><input type="text" id="setHotkeySeekBack" spellcheck="false">
+              <div class="hotkey-hint">Format: ctrl+alt+left</div></div>
+          </div>
+          <div class="set-row">
+            <div class="set-label"><div class="set-name">Next episode</div></div>
+            <div class="set-field"><input type="text" id="setHotkeyNext" spellcheck="false">
+              <div class="hotkey-hint">Format: ctrl+alt+up</div></div>
+          </div>
+          <div class="set-row">
+            <div class="set-label"><div class="set-name">Previous episode</div></div>
+            <div class="set-field"><input type="text" id="setHotkeyPrev" spellcheck="false">
+              <div class="hotkey-hint">Format: ctrl+alt+down</div></div>
+          </div>
+        </div>
+
+        <div class="set-section">
+          <div class="set-section-title">Player &amp; Downloads</div>
+          <div class="set-row">
+            <div class="set-label">
+              <div class="set-name">Preferred player</div>
+              <div class="set-desc">Used when starting playback or hosting a room ("Ask" = choose each time).</div>
+            </div>
+            <div class="set-field">
+              <select id="setPlayer">
+                <option value="ask">Ask</option><option value="mpv">MPV</option><option value="vlc">VLC</option>
+              </select>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-label">
+              <div class="set-name">Download quality</div>
+              <div class="set-desc">Quality used for the core CLI downloader.</div>
+            </div>
+            <div class="set-field">
+              <select id="setDownloadQuality">
+                <option value="auto">Auto</option><option value="1080p">1080p</option>
+                <option value="720p">720p</option><option value="480p">480p</option>
+                <option value="360p">360p</option><option value="best">Best</option>
+              </select>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-label">
+              <div class="set-name">Download mode</div>
+              <div class="set-desc">Internal = app-managed downloader; external = hand off to a download tool.</div>
+            </div>
+            <div class="set-field">
+              <select id="setDownloadMode">
+                <option value="internal">Internal</option><option value="external">External</option>
+              </select>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-label">
+              <div class="set-name">Download directory</div>
+              <div class="set-desc">Folder used by the core downloader (relative to home).</div>
+            </div>
+            <div class="set-field"><input type="text" id="setDownloadDir" spellcheck="false"></div>
+          </div>
+        </div>
+
+        <div class="set-section">
+          <div class="set-section-title">Language &amp; Provider</div>
+          <div class="set-row">
+            <div class="set-label">
+              <div class="set-name">Preferred language</div>
+              <div class="set-desc">Default audio track &amp; subtitle language.</div>
+            </div>
+            <div class="set-field">
+              <select id="setPreferredLang">
+                <option value="Arabic Sub">Arabic Sub</option>
+                <option value="English Sub">English Sub</option>
+                <option value="English Dub">English Dub</option>
+              </select>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-label">
+              <div class="set-name">Preferred provider</div>
+              <div class="set-desc">Server tried first when resolving streams (Auto = chain order).</div>
+            </div>
+            <div class="set-field">
+              <select id="setPreferredProvider">
+                <option value="auto">Auto</option>
+                <option value="miruro">Miruro</option><option value="hianime">HiAnime</option>
+                <option value="allanime">AllAnime</option><option value="api">API</option>
+                <option value="mkissa">Mkissa</option><option value="gogoanime">GogoAnime</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="set-section">
+          <div class="set-section-title">Appearance</div>
+          <div class="set-row">
+            <div class="set-label">
+              <div class="set-name">Theme</div>
+              <div class="set-desc">Accent palette for the interface.</div>
+            </div>
+            <div class="set-field">
+              <select id="setTheme"></select>
+            </div>
+          </div>
+        </div>
+
+        <div class="set-section">
+          <div class="set-section-title">Privacy</div>
+          <div class="set-row">
+            <div class="set-label">
+              <div class="set-name">Discord Rich Presence</div>
+              <div class="set-desc">Show what you're watching on your Discord profile.</div>
+            </div>
+            <div class="set-field">
+              <label class="switch"><input type="checkbox" id="setDiscordRpc"><span class="slider"></span></label>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-label">
+              <div class="set-name">Anonymous analytics</div>
+              <div class="set-desc">Share anonymous usage stats to improve the app. No personal data.</div>
+            </div>
+            <div class="set-field">
+              <label class="switch"><input type="checkbox" id="setAnalytics"><span class="slider"></span></label>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="set-actions">
+        <button class="btn-reset" id="setReset">Reset to defaults</button>
+        <button class="primary" id="setSave">Save Settings</button>
+      </div>
+    </div>
+  </div>
+
   <div id="toast"></div>
 
   <!-- ================= PRE-ROLL AD BUFFER MODAL ================= -->
@@ -1567,7 +1985,7 @@
     <div class="preroll-card">
       <div class="preroll-brand">
         <div class="preroll-logo">◆</div>
-        <div class="preroll-name">ani-cli-arabic</div>
+        <div class="preroll-name">AniNova</div>
       </div>
       <div class="preroll-media" id="prerollMedia">
         <video id="prerollVideo" autoplay playsinline></video>
@@ -1615,12 +2033,198 @@
   let appSettings = null;
   async function loadSettings() {
     if (appSettings) return appSettings;
+    return refreshSettings();
+  }
+  async function refreshSettings() {
     try {
       const api = await getApi();
       appSettings = (api && api.get_settings) ? (await api.get_settings()) : {};
     } catch (e) { appSettings = {}; }
     return appSettings || {};
   }
+
+  // ---------- theme palettes (accent overrides, shared with core "theme") ----------
+  const GUI_THEMES = {
+    sunrise:  { a: "#ff7e5f", b: "#feb47b" },
+    blue:     { a: "#7eb3d4", b: "#9ac9e3" },
+    red:      { a: "#d97979", b: "#e59393" },
+    green:    { a: "#8ba87f", b: "#a3ba98" },
+    purple:   { a: "#a88dbd", b: "#bda3cf" },
+    cyan:     { a: "#7ebfbf", b: "#9bd3d3" },
+    yellow:   { a: "#d9c379", b: "#e5d193" },
+    pink:     { a: "#d9a3ba", b: "#e5b8cd" },
+    orange:   { a: "#d9a379", b: "#e5b693" },
+    teal:     { a: "#6b9a9a", b: "#85b0b0" },
+    magenta:  { a: "#c77eb8", b: "#d79acd" },
+    lime:     { a: "#a3ba8d", b: "#b7cba3" },
+    coral:    { a: "#d99382", b: "#e5a899" },
+    lavender: { a: "#b4a8cf", b: "#c8bedd" },
+    gold:     { a: "#c9b87f", b: "#d9ca98" },
+    mint:     { a: "#8dbaa3", b: "#a3cbb7" },
+    rose:     { a: "#d97ea8", b: "#e599bd" },
+    sunset:   { a: "#e48b7a", b: "#f0a19a" }
+  };
+  function hexToRgba(h, alpha) {
+    const x = String(h || "").replace("#", "");
+    if (!/^[0-9a-f]{6}$/i.test(x)) return null;
+    const n = parseInt(x, 16);
+    return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+  }
+  function applyTheme(name) {
+    const p = GUI_THEMES[name] || GUI_THEMES.sunrise;
+    const r = document.documentElement.style;
+    r.setProperty("--accent", p.a);
+    r.setProperty("--accent-2", p.b);
+    r.setProperty("--sunrise", `linear-gradient(135deg, ${p.a}, ${p.b})`);
+    const soft = hexToRgba(p.a, .14);
+    const border = hexToRgba(p.a, .4);
+    if (soft) r.setProperty("--sunrise-soft", soft);
+    if (border) r.setProperty("--sunrise-border", border);
+  }
+
+  // ---------- settings menu ----------
+  const SET_FIELDS = [
+    { id: "setDefaultQuality", key: "default_quality" },
+    { id: "setAspectRatio", key: "mpv_aspect_ratio" },
+    { id: "setCustomKeys", key: "mpv_custom_keys", bool: true },
+    { id: "setAutoNext", key: "auto_next", bool: true },
+    { id: "setAutoSkipEnabled", key: "auto_skip_enabled", bool: true },
+    { id: "setAutoSkipOsd", key: "auto_skip_osd", bool: true },
+    { id: "setPrerollEnabled", key: "preroll_enabled", bool: true },
+    { id: "setPrerollUrl", key: "preroll_video_url" },
+    { id: "setPrerollSeconds", key: "preroll_seconds" },
+    { id: "setHotkeysEnabled", key: "global_hotkeys_enabled", bool: true },
+    { id: "setSkipSeconds", key: "global_skip_seconds" },
+    { id: "setHotkeyPlayPause", key: "global_hotkey_play_pause" },
+    { id: "setHotkeySeekFwd", key: "global_hotkey_seek_forward" },
+    { id: "setHotkeySeekBack", key: "global_hotkey_seek_backward" },
+    { id: "setHotkeyNext", key: "global_hotkey_next_episode" },
+    { id: "setHotkeyPrev", key: "global_hotkey_prev_episode" },
+    { id: "setPlayer", key: "player" },
+    { id: "setDownloadQuality", key: "default_download_quality" },
+    { id: "setDownloadMode", key: "download_mode" },
+    { id: "setDownloadDir", key: "download_directory" },
+    { id: "setPreferredLang", key: "preferred_language" },
+    { id: "setPreferredProvider", key: "preferred_provider" },
+    { id: "setDiscordRpc", key: "discord_rpc", bool: true },
+    { id: "setAnalytics", key: "analytics", bool: true }
+  ];
+
+  function fillSettingsForm(settings) {
+    if (!settings) return;
+    for (const f of SET_FIELDS) {
+      const el = $("#" + f.id);
+      if (!el) continue;
+      let v = settings[f.key];
+      if (f.bool) {
+        el.checked = !!v;
+      } else if (el.type === "number") {
+        el.value = (v == null || isNaN(v)) ? "" : String(v);
+      } else {
+        el.value = (v == null) ? "" : String(v);
+      }
+    }
+    const themeSel = $("#setTheme");
+    if (themeSel) {
+      themeSel.innerHTML = "";
+      const names = Object.keys(GUI_THEMES);
+      for (const n of names) {
+        const o = document.createElement("option");
+        o.value = n;
+        o.textContent = n[0].toUpperCase() + n.slice(1);
+        themeSel.appendChild(o);
+      }
+      const cur = (settings.theme && GUI_THEMES[settings.theme]) ? settings.theme : "sunrise";
+      themeSel.value = cur;
+    }
+  }
+
+  function collectSettingsForm() {
+    const patch = {};
+    for (const f of SET_FIELDS) {
+      const el = $("#" + f.id);
+      if (!el) continue;
+      patch[f.key] = f.bool ? el.checked : el.value;
+    }
+    const themeSel = $("#setTheme");
+    if (themeSel) patch.theme = themeSel.value;
+    return patch;
+  }
+
+  function syncPlayerControls(settings) {
+    const resSel = $("#resSel");
+    if (resSel && settings && settings.default_quality) {
+      const q = String(settings.default_quality).toLowerCase();
+      const opts = Array.from(resSel.options).map(o => o.value);
+      if (opts.indexOf(q) !== -1) resSel.value = q;
+    }
+    const playerSel = $("#playerSel");
+    if (playerSel && settings && settings.player) {
+      const p = String(settings.player).toLowerCase();
+      if (p !== "ask" && Array.from(playerSel.options).some(o => o.value === p)) {
+        playerSel.value = p;
+      }
+    }
+  }
+
+  async function saveSettings() {
+    const api = await getApi();
+    if (!api || !api.save_settings) return;
+    const patch = collectSettingsForm();
+    try {
+      const res = await api.save_settings(patch);
+      appSettings = (res && res.settings) || appSettings;
+      if (res && res.ok) {
+        applyTheme(appSettings.theme);
+        fillSettingsForm(appSettings);
+        syncPlayerControls(appSettings);
+        refreshAutoSkip();
+        toast("Settings saved");
+        closeSettings();
+      } else {
+        toast((res && res.error) || "Failed to save settings", true);
+      }
+    } catch (e) { toast(String(e), true); }
+  }
+
+  async function resetSettings() {
+    const api = await getApi();
+    if (!api || !api.reset_settings) return;
+    try {
+      const res = await api.reset_settings();
+      if (res && res.ok) {
+        appSettings = res.settings || {};
+        fillSettingsForm(appSettings);
+        applyTheme(appSettings.theme);
+        syncPlayerControls(appSettings);
+        refreshAutoSkip();
+        toast("Settings reset to defaults");
+      } else {
+        toast((res && res.error) || "Failed to reset settings", true);
+      }
+    } catch (e) { toast(String(e), true); }
+  }
+
+  async function openSettings() {
+    const settings = await loadSettings();
+    applyTheme(settings.theme);
+    fillSettingsForm(settings);
+    $("#settingsModal").classList.add("show");
+  }
+  function closeSettings() {
+    $("#settingsModal").classList.remove("show");
+  }
+
+  $("#btnSettings").addEventListener("click", () => openSettings());
+  $("#setModalClose").addEventListener("click", closeSettings);
+  $("#settingsModal").addEventListener("click", (e) => {
+    if (e.target === $("#settingsModal")) closeSettings();
+  });
+  $("#setSave").addEventListener("click", () => saveSettings());
+  $("#setReset").addEventListener("click", () => resetSettings());
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && $("#settingsModal").classList.contains("show")) closeSettings();
+  });
 
   // ---------- pre-roll ad buffer ----------
   // Honest implementation: the "ad slot" is configurable via settings. When no
@@ -2790,6 +3394,10 @@ attachHoverMeta(card, r);
 
   refreshWt();
   refreshAutoSkip();
+  loadSettings().then(s => {
+    applyTheme(s.theme);
+    syncPlayerControls(s);
+  });
   loadTrending();
   loadFeatured();
   loadTop10();

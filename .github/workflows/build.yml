@@ -202,20 +202,28 @@ jobs:
             --exclude-module PyQt6 \
             --exclude-module PySide6 \
             --exclude-module customtkinter \
-            --exe-name ani-cli-ar-gui
+            --exe-name AniNova
 
       - name: Assemble Linux GUI bundle
         if: runner.os == 'Linux'
+        # Branded as AniNova (single-file exe + desktop entry + installer).
+        # The version comes from the git tag (e.g. v1.3.1) so the file name is
+        # AniNova-v1.3.1-Linux.tar.gz; on manual (workflow_dispatch) runs it
+        # falls back to the version baked into version.py.
         run: |
-          mkdir -p ani-cli-ar-gui
-          cp dist/ani-cli-ar-gui ani-cli-ar-gui/ani-cli-ar-gui
-          cp assets/ani-cli-ar.desktop ani-cli-ar-gui/ani-cli-ar.desktop
-          cp assets/icon.png ani-cli-ar-gui/ani-cli-ar.png
-          cp scripts/install_linux.sh ani-cli-ar-gui/install.sh
-          chmod +x ani-cli-ar-gui/install.sh ani-cli-ar-gui/ani-cli-ar-gui
-          tar -czf ani-cli-ar-gui-linux.tar.gz ani-cli-ar-gui
+          version="${{ github.ref_name }}"
+          if [[ ! "$version" =~ ^v[0-9] ]]; then
+            version="v$(sed -n 's/^__version__ = "\([^"]*\)"/\1/p' ani_cli_arabic/version.py)"
+          fi
+          mkdir -p AniNova
+          cp dist/AniNova AniNova/AniNova
+          cp assets/aninova.desktop AniNova/aninova.desktop
+          cp assets/icon.png AniNova/aninova.png
+          cp scripts/install_linux.sh AniNova/install.sh
+          chmod +x AniNova/install.sh AniNova/AniNova
+          tar -czf "AniNova-$version-Linux.tar.gz" AniNova
           echo "Bundled:"
-          ls -lh ani-cli-ar-gui/ ani-cli-ar-gui-linux.tar.gz
+          ls -lh AniNova/ "AniNova-$version-Linux.tar.gz"
 
       - name: Upload GUI artifacts (Windows)
         if: runner.os == 'Windows'
@@ -229,8 +237,8 @@ jobs:
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
-          name: ani-cli-ar-gui-linux
-          path: ani-cli-ar-gui-linux.tar.gz
+          name: AniNova-linux
+          path: AniNova-*-Linux.tar.gz
 
   release:
     needs: [build-gui]

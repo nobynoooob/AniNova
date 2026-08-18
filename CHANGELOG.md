@@ -10,6 +10,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/) conventions. This
 
 ---
 
+## [v1.4.0] - 2026-08-18
+
+### ⚙️ Comprehensive Settings Menu (GUI)
+- New ⚙ **Settings** button in the top nav opens a dedicated modal with 8 sections: Playback, Auto-Skip, Pre-Roll, Watch Together & Hotkeys, Player & Downloads, Language & Provider, Appearance, and Privacy — recreating every core `ani-cli-ar` option plus new GUI-first ones.
+- Backend settings bridge rewritten: `get_settings()` now returns all **25** settings keys (properly typed), new `save_settings(patch)` validates/whitelists keys, clamps ints (pre-roll 1–120 s, hotkey step 1–300 s), drops invalid enum values without failing the save, and persists atomically to the same `~/.ani-cli-arabic/database/config.json` the core CLI consumes. New `reset_settings()` + `SettingsManager.reset_to_defaults()` restore factory defaults from the menu.
+- Live side effects: toggling/editing global-hotkey settings re-arms the system-wide listener immediately when a Watch Together host room is active; `default_quality` and `player` now pre-select the details-page quality/player dropdowns; the Auto-Skip status pill updates on save.
+- **Themes**: 18 accent palettes (full CLI theme-name parity + the default sunrise look) apply instantly via CSS variables. The stored default theme is now `sunrise` so existing users keep the exact same look on upgrade (the CLI falls back to its own blue default regardless).
+
+### 🎨 Branding — Linux builds unified as AniNova
+- The Linux release asset is now **`AniNova-v<version>-Linux.tar.gz`** (was `ani-cli-ar-gui-linux.tar.gz`), versioned from the git tag with a `version.py` fallback — matching the Windows naming convention.
+- `build_desktop.py` defaults the GUI executable name to **`AniNova`** (both OSes build with `--exe-name AniNova`); builder banner and portable-zip README rebranded.
+- New `assets/aninova.desktop` (Name/Exec/Icon → AniNova/aninova) replaces the old `ani-cli-ar.desktop`; `scripts/install_linux.sh` installs the `AniNova` binary and `aninova` icon; bundle icon renamed `aninova.png`.
+- README (EN/AR) asset tables, `launch.sh` comment, and AGENTS.md packaging docs updated. pip entry points (`ani-cli-ar-gui` / `aninova`) and the Windows asset name are unchanged.
+
+---
+
 ## [v1.3.1] - 2026-08-18
 
 ### 🔧 Auto-Skip vs. Watch Together — IPC polling collision fix

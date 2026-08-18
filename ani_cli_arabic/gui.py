@@ -69,6 +69,100 @@ ARABIC_PROVIDER = "arabic_api"
 _ARABIC_QUALITY_KEYS = {"1080p": "FRFhdQ", "720p": "FRLink", "480p": "FRLowQ"}
 _SUBTITLE_EXT_RE = _re.compile(r"\.(srt|vtt|ass|ssa)(?:\?|$)", _re.IGNORECASE)
 
+# ---------------------------------------------------------------------------
+# Settings menu: the full key inventory plus validation domains for the
+# frontend-facing settings bridge (get_settings / save_settings / reset_settings).
+# Values live in ~/.ani-cli-arabic/database/config.json via SettingsManager and
+# are shared with the core CLI, so the GUI menu edits the same config the CLI
+# consumes (default_quality, download prefs, provider, theme, ...).
+# ---------------------------------------------------------------------------
+_SETTING_ALL_KEYS = (
+    "default_quality",
+    "default_download_quality",
+    "download_mode",
+    "download_directory",
+    "player",
+    "auto_next",
+    "discord_rpc",
+    "theme",
+    "analytics",
+    "preferred_language",
+    "preferred_provider",
+    "mpv_aspect_ratio",
+    "mpv_custom_keys",
+    "preroll_enabled",
+    "preroll_video_url",
+    "preroll_seconds",
+    "global_hotkeys_enabled",
+    "global_hotkey_play_pause",
+    "global_hotkey_seek_forward",
+    "global_hotkey_seek_backward",
+    "global_hotkey_next_episode",
+    "global_hotkey_prev_episode",
+    "global_skip_seconds",
+    "auto_skip_enabled",
+    "auto_skip_osd",
+)
+_SETTING_BOOL_KEYS = frozenset({
+    "auto_next", "discord_rpc", "analytics", "mpv_custom_keys",
+    "preroll_enabled", "global_hotkeys_enabled", "auto_skip_enabled",
+    "auto_skip_osd",
+})
+_SETTING_INT_KEYS = frozenset({"preroll_seconds", "global_skip_seconds"})
+_SETTING_INT_RANGES = {
+    "preroll_seconds": (1, 120),
+    "global_skip_seconds": (1, 300),
+}
+_SETTING_QUALITY_OPTIONS = ("auto", "1080p", "720p", "480p", "360p", "best")
+_SETTING_THEME_NAMES = (
+    "sunrise", "blue", "red", "green", "purple", "cyan", "yellow", "pink",
+    "orange", "teal", "magenta", "lime", "coral", "lavender", "gold", "mint",
+    "rose", "sunset",
+)
+_SETTING_ENUMS = {
+    "default_quality": _SETTING_QUALITY_OPTIONS,
+    "default_download_quality": _SETTING_QUALITY_OPTIONS,
+    "download_mode": ("internal", "external"),
+    "player": ("ask", "mpv", "vlc"),
+    "preferred_language": ("Arabic Sub", "English Sub", "English Dub"),
+    "preferred_provider": ("auto", "miruro", "hianime", "allanime", "api",
+                            "mkissa", "gogoanime"),
+    "mpv_aspect_ratio": ("auto", "16:9", "4:3", "2.35:1", "21:9", "-1"),
+    "theme": _SETTING_THEME_NAMES,
+}
+_SETTING_HOTKEY_KEYS = frozenset({
+    "global_hotkeys_enabled",
+    "global_hotkey_play_pause",
+    "global_hotkey_seek_forward",
+    "global_hotkey_seek_backward",
+    "global_hotkey_next_episode",
+    "global_hotkey_prev_episode",
+})
+
+
+def _coerce_setting(key: str, value) -> Any:
+    """Coerce a raw frontend value into the right type for ``key`` (bool keys
+    accept true/false strings from the JS bridge; int keys are clamped to
+    their configured range; enum keys validate against the allowed values)."""
+    if key in _SETTING_BOOL_KEYS:
+        if isinstance(value, str):
+            return value.strip().lower() in ("1", "true", "yes", "on")
+        return bool(value)
+    if key in _SETTING_INT_KEYS:
+        try:
+            n = int(value)
+        except (TypeError, ValueError):
+            return None
+        lo, hi = _SETTING_INT_RANGES.get(key, (n, n))
+        return max(lo, min(hi, n))
+    allowed = _SETTING_ENUMS.get(key)
+    if allowed is not None:
+        s = str(value or "").strip()
+        if not s or s not in allowed:
+            return None
+        return s
+    return str(value or "").strip()
+
 _SEARCH_GRAPHQL = """\
 query ($search: String, $page: Int, $perPage: Int) {
   Page(page: $page, perPage: $perPage) {
@@ -1694,34 +1788,99 @@ class JSApi:
             return []
 
     # ------------------------------------------------------------------
-    # Frontend-facing settings (pre-roll ad buffer, playback prefs)
+    # Frontend-facing settings (full Settings menu: playback, auto-skip,
+    # pre-roll, watch together / global hotkeys, downloads, privacy)
     # ------------------------------------------------------------------
     def get_settings(self) -> Dict:
-        """Return the app settings the UI needs (pre-roll ad slot, playback)."""
+        """Return every user setting the UI needs, typed for the form.
+
+        Mirrors the full ``SettingsManager`` key inventory (shared with the
+        core CLI), so the GUI Settings menu edits the same ``config.json`` the
+        CLI consumes. Boolean keys are normalised to real bools, integer keys
+        to ints and everything else to strings (with sane defaults)."""
         try:
             from .settings import SettingsManager
             s = SettingsManager()
-            return {
-                "preroll_enabled": bool(s.get("preroll_enabled", False)),
-                "preroll_video_url": str(s.get("preroll_video_url", "") or ""),
-                "preroll_seconds": int(s.get("preroll_seconds", 5) or 5),
-                "default_quality": str(s.get("default_quality", "1080p") or "1080p"),
-                "mpv_aspect_ratio": str(s.get("mpv_aspect_ratio", "auto") or "auto"),
-                "mpv_custom_keys": bool(s.get("mpv_custom_keys", True)),
-                "auto_skip_enabled": bool(s.get("auto_skip_enabled", True)),
-                "auto_skip_osd": bool(s.get("auto_skip_osd", True)),
-            }
         except Exception:
-            return {
-                "preroll_enabled": False,
-                "preroll_video_url": "",
-                "preroll_seconds": 5,
-                "default_quality": "1080p",
-                "mpv_aspect_ratio": "auto",
-                "mpv_custom_keys": True,
-                "auto_skip_enabled": True,
-                "auto_skip_osd": True,
-            }
+            s = None
+        out: Dict[str, Any] = {}
+        for key in _SETTING_ALL_KEYS:
+            default = None
+            if s is None:
+                value = default
+            else:
+                try:
+                    value = s.get(key, default)
+                except Exception:
+                    value = default
+            if key in _SETTING_BOOL_KEYS:
+                out[key] = bool(value)
+            elif key in _SETTING_INT_KEYS:
+                lo, hi = _SETTING_INT_RANGES.get(key, (1, 1))
+                try:
+                    out[key] = max(lo, min(hi, int(value)))
+                except (TypeError, ValueError):
+                    out[key] = lo
+            elif key in ("preroll_video_url", "download_directory"):
+                out[key] = str(value or "").strip()
+            else:
+                out[key] = str(value or "").strip()
+        return out
+
+    def save_settings(self, patch: Dict) -> Dict:
+        """Persist validated settings and apply their live side effects.
+
+        Accepts a partial dict of ``{key: value}`` pairs. Unknown keys are
+        ignored; invalid enum values, unparseable ints and out-of-range ints
+        are dropped (the rest still saves). After saving, hotkey-relevant
+        changes re-arm the system-wide listener when a Watch Together room is
+        active. Returns ``{"ok": bool, "settings": {...}, "error": str|None}``
+        with the full current settings on success."""
+        if not isinstance(patch, dict):
+            return {"ok": False, "settings": {}, "error": "patch must be an object"}
+        try:
+            from .settings import SettingsManager
+            s = SettingsManager()
+        except Exception as exc:
+            return {"ok": False, "settings": {}, "error": str(exc)}
+        changed_hotkeys = False
+        saved = 0
+        for key, raw in patch.items():
+            if key not in _SETTING_ALL_KEYS:
+                continue
+            value = _coerce_setting(key, raw)
+            if value is None:
+                continue
+            s.settings[key] = value
+            if key in _SETTING_HOTKEY_KEYS:
+                changed_hotkeys = True
+            saved += 1
+        try:
+            s.save()
+        except Exception as exc:
+            return {"ok": False, "settings": self.get_settings(), "error": str(exc)}
+
+        # Live side effect: if the host room is running, re-arm the global
+        # hotkey listener so new bindings/toggles take effect immediately.
+        if changed_hotkeys:
+            try:
+                self._stop_global_hotkeys()
+                host = self._watch_host
+                if host is not None and getattr(host, "is_active", False):
+                    self._start_global_hotkeys(host)
+            except Exception:
+                pass
+        return {"ok": True, "settings": self.get_settings(),
+                "error": None, "saved": saved}
+
+    def reset_settings(self) -> Dict:
+        """Restore every setting to its built-in default and persist."""
+        try:
+            from .settings import SettingsManager
+            SettingsManager().reset_to_defaults()
+        except Exception as exc:
+            return {"ok": False, "settings": {}, "error": str(exc)}
+        return {"ok": True, "settings": self.get_settings(), "error": None}
 
     @staticmethod
     def _watch_language_label(category) -> str:

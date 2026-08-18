@@ -48,7 +48,7 @@ Grab the latest release from the [releases page](https://github.com/nobynoooob/A
 
 | Asset | Platform | What's inside |
 |-------|----------|---------------|
-| `AniNova-Linux` | Linux | Single-file executable (Python runtime + app bundled) |
+| `AniNova-v<version>-Linux.tar.gz` | Linux | Single-file executable + desktop entry + installer |
 | `AniNova-v<version>-Windows-Portable.zip` | Windows | Portable folder (exe + DLLs + bundled mpv) |
 
 ### Requirements

@@ -1,12 +1,12 @@
 #!/bin/sh
 #
-# install.sh — Installer for the ani-cli-ar GUI (Linux)
+# install.sh — Installer for the AniNova GUI (Linux)
 #
-# Copies the standalone ani-cli-ar-gui executable into ~/.local/bin (default)
+# Copies the standalone AniNova executable into ~/.local/bin (default)
 # or /usr/local/bin (--system) and registers it in the desktop menu via a
 # .desktop entry in ~/.local/share/applications (or /usr/share/applications).
 #
-# Usage (run from inside the extracted ani-cli-ar-gui bundle directory):
+# Usage (run from inside the extracted AniNova bundle directory):
 #   ./install.sh           # user install (default)
 #   ./install.sh --system  # system-wide install (/usr/local/bin)
 #
@@ -15,13 +15,13 @@ set -eu
 
 # --- locate bundle files relative to this script ---------------------------
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-BIN_NAME="ani-cli-ar-gui"
+BIN_NAME="AniNova"
 BIN_SRC="$SCRIPT_DIR/$BIN_NAME"
-DESKTOP_SRC="$SCRIPT_DIR/ani-cli-ar.desktop"
-ICON_SRC="$SCRIPT_DIR/ani-cli-ar.png"
+DESKTOP_SRC="$SCRIPT_DIR/aninova.desktop"
+ICON_SRC="$SCRIPT_DIR/aninova.png"
 
 if [ ! -f "$BIN_SRC" ]; then
-    echo "error: $BIN_SRC not found — run from the extracted ani-cli-ar-gui bundle directory." >&2
+    echo "error: $BIN_SRC not found — run from the extracted AniNova bundle directory." >&2
     exit 1
 fi
 
@@ -39,7 +39,7 @@ else
     ICON_DIR="$HOME/.local/share/icons/hicolor/256x256/apps"
 fi
 
-ICON_NAME="ani-cli-ar.png"
+ICON_NAME="aninova.png"
 
 # --- install ---------------------------------------------------------------
 echo "Installing $BIN_NAME to $BIN_DIR ..."
@@ -65,5 +65,5 @@ if command -v update-desktop-database >/dev/null 2>&1; then
 fi
 
 echo
-echo "Done. Launch ani-cli-ar GUI from your application menu, or run:"
+echo "Done. Launch AniNova from your application menu, or run:"
 echo "  $BIN_DIR/$BIN_NAME"

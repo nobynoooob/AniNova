@@ -14,33 +14,7 @@ class SettingsManager:
         return db_dir / "config.json"
 
     def _load_settings(self) -> dict:
-        defaults = {
-            "default_quality": "1080p",
-            "default_download_quality": "1080p",
-            "download_mode": "internal",
-            "download_directory": "downloads",
-            "player": "ask",
-            "auto_next": False,
-            "discord_rpc": True,
-            "theme": "blue",
-            "analytics": True,
-            "preferred_language": "Arabic Sub",
-            "preferred_provider": "",
-            "mpv_aspect_ratio": "auto",
-            "mpv_custom_keys": True,
-            "preroll_enabled": False,
-            "preroll_video_url": "",
-            "preroll_seconds": 5,
-            "global_hotkeys_enabled": True,
-            "global_hotkey_play_pause": "ctrl+alt+p",
-            "global_hotkey_seek_forward": "ctrl+alt+right",
-            "global_hotkey_seek_backward": "ctrl+alt+left",
-            "global_hotkey_next_episode": "ctrl+alt+up",
-            "global_hotkey_prev_episode": "ctrl+alt+down",
-            "global_skip_seconds": 10,
-            "auto_skip_enabled": True,
-            "auto_skip_osd": True,
-        }
+        defaults = self._load_defaults()
         
         if not self.config_file.exists():
             return defaults
@@ -67,3 +41,38 @@ class SettingsManager:
     def set(self, key, value):
         self.settings[key] = value
         self.save()
+
+    def reset_to_defaults(self):
+        """Restore the built-in defaults and persist them (Settings menu)."""
+        self.settings = self._load_defaults()
+        self.save()
+
+    @staticmethod
+    def _load_defaults() -> dict:
+        return {
+            "default_quality": "1080p",
+            "default_download_quality": "1080p",
+            "download_mode": "internal",
+            "download_directory": "downloads",
+            "player": "ask",
+            "auto_next": False,
+            "discord_rpc": True,
+            "theme": "sunrise",
+            "analytics": True,
+            "preferred_language": "Arabic Sub",
+            "preferred_provider": "",
+            "mpv_aspect_ratio": "auto",
+            "mpv_custom_keys": True,
+            "preroll_enabled": False,
+            "preroll_video_url": "",
+            "preroll_seconds": 5,
+            "global_hotkeys_enabled": True,
+            "global_hotkey_play_pause": "ctrl+alt+p",
+            "global_hotkey_seek_forward": "ctrl+alt+right",
+            "global_hotkey_seek_backward": "ctrl+alt+left",
+            "global_hotkey_next_episode": "ctrl+alt+up",
+            "global_hotkey_prev_episode": "ctrl+alt+down",
+            "global_skip_seconds": 10,
+            "auto_skip_enabled": True,
+            "auto_skip_osd": True,
+        }

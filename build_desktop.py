@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build standalone PyInstaller executables for ani-cli-arabic.
+"""Build standalone PyInstaller executables for AniNova (ani-cli-arabic).
 
 Two targets are supported:
 
@@ -39,7 +39,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 PKG = "ani_cli_arabic"
-ENTRY_GUI = "ani-cli-ar-gui"
+ENTRY_GUI = "AniNova"
 ENTRY_CLI = "ani-cli-ar-cli"
 
 # Browser bundle is placed under this name inside the PyInstaller bundle and
@@ -475,7 +475,7 @@ def build():
     args = parser.parse_args()
 
     print("=" * 60)
-    print(f"  ani-cli-arabic {'GUI' if args.target == 'gui' else 'CLI'} Builder")
+    print(f"  AniNova {'GUI' if args.target == 'gui' else 'CLI'} Builder")
     print("=" * 60)
 
     if not _check_pyinstaller():
@@ -628,8 +628,8 @@ def build():
         readme_header = "Double-click %s to launch the GUI.\n\n" % exe_name_os if is_gui else \
             "Run %s from a terminal to open the TUI.\n\n" % exe_name_os
         readme = (
-            "ani-cli-arabic - portable build\n"
-            "=============================\n\n"
+            "AniNova - portable build\n"
+            "=======================\n\n"
             + readme_header +
             "Bundled:\n"
             "  - Python runtime and all application libraries\n"

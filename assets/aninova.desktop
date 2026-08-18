@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=AniNova
+Comment=Anime streaming with Arabic subtitles
+Exec=/usr/local/bin/AniNova
+Icon=aninova
+Terminal=false
+Type=Application
+Categories=AudioVideo;Player;
