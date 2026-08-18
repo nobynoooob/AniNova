@@ -6,7 +6,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/) conventions. This
 
 ---
 
-## [Unreleased]
+## [v1.1.0] - 2026-08-18
 
 ### 🔒 Watch Together — Host-is-King protocol v2
 - Every host broadcast is stamped with a monotonic `seq`, sender clock `ts`, and media `epoch`; guests drop stale/duplicate messages (`seq <= last_seen`) and stale-epoch media work.
