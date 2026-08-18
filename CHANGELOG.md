@@ -10,6 +10,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/) conventions. This
 
 ---
 
+## [v1.4.1] - 2026-08-18
+
+### 🐛 Bug Fixes & Stability
+- **Settings modal contrast fix**: native `<select>`/`<option>` controls ignored page CSS and rendered with the OS light palette on pywebview engines (WebView2 / GTK), making dropdown text unreadable. Added `color-scheme: dark` on `:root` (dark native controls app-wide), `appearance: none` on the modal's selects (so their dark background actually applies) with a custom chevron arrow, explicit dark `option` styling (`#1e1e2e` bg / `#f0f0f0` text, accent highlight for hover/checked), and higher-contrast hover (`#5a5a6e` border) / focus (accent border + glow ring) states across all 8 settings sections.
+
+---
+
 ## [v1.4.0] - 2026-08-18
 
 ### ⚙️ Comprehensive Settings Menu (GUI)

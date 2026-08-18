@@ -25,6 +25,9 @@
     --radius: 14px;
     --shadow: 0 18px 50px rgba(0, 0, 0, .55);
     --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+    /* Native form controls (select popups, scrollbars, checkboxes) follow the
+       dark UI instead of the OS light palette across pywebview engines. */
+    color-scheme: dark;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; }
@@ -1443,19 +1446,50 @@
   .set-field select,
   .set-field input[type="text"],
   .set-field input[type="number"] {
-    background: var(--bg-2);
-    border: 1px solid var(--border);
-    color: var(--text);
+    /* High-contrast dark surface for every control in the Settings modal. */
+    background: #1a1a24;
+    border: 1px solid #3a3a4a;
+    color: #f0f0f0;
     border-radius: 8px;
     padding: 7px 10px;
     font-size: 13px;
     outline: none;
     min-width: 150px;
     width: auto;
-    transition: border-color .15s;
+    transition: border-color .15s, box-shadow .15s;
+    color-scheme: dark;
   }
+  /* Native <select> controls don't honour backgrounds unless appearance is
+     removed; strip the OS chrome and draw our own dark control + chevron. */
+  .set-field select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    cursor: pointer;
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23f0f0f0' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 32px;
+  }
+  /* Options-menu popups: explicit dark background + readable text so they stay
+     legible on every rendering engine (GTK / WebView2 / Chromium). */
+  .set-field select option {
+    background: #1e1e2e;
+    color: #f0f0f0;
+  }
+  .set-field select option:hover,
+  .set-field select option:focus,
+  .set-field select option:checked {
+    background: var(--accent);
+    color: #ffffff;
+  }
+  .set-field select:hover,
+  .set-field input:hover { border-color: #5a5a6e; }
   .set-field select:focus,
-  .set-field input:focus { border-color: var(--accent); }
+  .set-field input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(255, 126, 95, .18);
+  }
   .set-field input[type="text"] { min-width: 210px; }
   .set-field input[type="number"] { min-width: 90px; }
   .set-field .hotkey-hint { font-size: 10.5px; color: var(--muted); margin-top: 3px; }
