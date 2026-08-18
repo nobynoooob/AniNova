@@ -31,6 +31,13 @@ class SettingsManager:
             "preroll_enabled": False,
             "preroll_video_url": "",
             "preroll_seconds": 5,
+            "global_hotkeys_enabled": True,
+            "global_hotkey_play_pause": "ctrl+alt+p",
+            "global_hotkey_seek_forward": "ctrl+alt+right",
+            "global_hotkey_seek_backward": "ctrl+alt+left",
+            "global_hotkey_next_episode": "ctrl+alt+up",
+            "global_hotkey_prev_episode": "ctrl+alt+down",
+            "global_skip_seconds": 10,
         }
         
         if not self.config_file.exists():

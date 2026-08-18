@@ -368,6 +368,8 @@ class JSApi:
         self._player = None
         self._watch_host = None
         self._watch_guest = None
+        self._hotkeys = None
+        self._playing: Dict[str, Any] = {}
         self._history = None
         self._search_cache: OrderedDict[str, List[Dict]] = OrderedDict()
         self._ep_cache: OrderedDict[str, List[Dict]] = OrderedDict()
@@ -1534,6 +1536,18 @@ class JSApi:
             except Exception:
                 pass
 
+        # Track the current episode so global-hotkey skip next/prev can replay
+        # the same title with the sibling episode.
+        with self._lock:
+            self._playing = {
+                "anime_id": anime_id,
+                "episode_num": float(ep_num),
+                "provider": provider,
+                "category": category,
+                "player": player_choice,
+                "resolution": resolution,
+            }
+
         # Player preferences from settings: custom aspect-ratio override and the
         # app's custom keyboard hotkeys (enforced on the native mpv window).
         aspect = None
@@ -1827,6 +1841,130 @@ class JSApi:
 
         return _run_bounded(_auto, "gui:auto")
 
+    # ------------------------------------------------------------------
+    # Global hardware-level host controls (Watch Together)
+    # ------------------------------------------------------------------
+    def _start_global_hotkeys(self, host) -> bool:
+        """Start the system-wide global-hotkey listener for the host room.
+
+        Bindings come from settings. The listener runs on its own daemon
+        thread (OS event loop) and only dispatches while a host room is
+        active. Returns True when the OS backend is live, False otherwise
+        (e.g. Wayland session, missing DISPLAY, unsupported platform).
+        """
+        try:
+            if self._hotkeys is not None:
+                return bool(getattr(self._hotkeys, "active", False))
+            from .global_hotkeys import GlobalHotkeyManager
+            from .settings import SettingsManager
+            s = SettingsManager()
+            if not bool(s.get("global_hotkeys_enabled", True)):
+                return False
+            bindings = {
+                "play_pause": s.get("global_hotkey_play_pause", "ctrl+alt+p"),
+                "seek_forward": s.get("global_hotkey_seek_forward", "ctrl+alt+right"),
+                "seek_backward": s.get("global_hotkey_seek_backward", "ctrl+alt+left"),
+                "next_episode": s.get("global_hotkey_next_episode", "ctrl+alt+up"),
+                "prev_episode": s.get("global_hotkey_prev_episode", "ctrl+alt+down"),
+            }
+            mgr = GlobalHotkeyManager(bindings, self._on_global_hotkey)
+            mgr.start()
+            self._hotkeys = mgr
+            if not mgr.active and mgr.error:
+                try:
+                    from .monitoring import monitor
+                    monitor.track_error("Global hotkeys unavailable", {"reason": mgr.error})
+                except Exception:
+                    pass
+            return bool(mgr.active)
+        except Exception:
+            return False
+
+    def _stop_global_hotkeys(self):
+        if self._hotkeys is not None:
+            try:
+                self._hotkeys.stop()
+            except Exception:
+                pass
+            self._hotkeys = None
+
+    def _on_global_hotkey(self, action: str):
+        """Dispatcher invoked from the hotkey listener's daemon thread.
+
+        Kept non-blocking: every action is pushed onto a worker thread so the
+        OS event loop (and thus the next hotkey press) is never stalled by
+        player IPC, broadcasts or episode resolution."""
+        try:
+            host = self._watch_host
+            if host is None or not getattr(host, "is_active", False):
+                return
+            if action in ("play_pause", "play", "pause", "seek_forward", "seek_backward"):
+                skip = 10.0
+                try:
+                    from .settings import SettingsManager
+                    skip = float(SettingsManager().get("global_skip_seconds", 10.0) or 10.0)
+                except Exception:
+                    pass
+                threading.Thread(
+                    target=lambda: host.apply_global_action(action, skip_seconds=skip),
+                    daemon=True,
+                ).start()
+            elif action in ("next_episode", "prev_episode"):
+                threading.Thread(
+                    target=self._play_sibling_episode, args=(action,), daemon=True
+                ).start()
+        except Exception:
+            pass
+
+    def _play_sibling_episode(self, action: str):
+        """Play the next/previous episode of the currently playing title.
+
+        Mirrors the GUI's Next/Previous buttons (which just re-select the
+        row; the host then plays it). Runs on a worker thread because
+        ``play_episode`` blocks until the player exits."""
+        try:
+            with self._lock:
+                playing = dict(self._playing)
+            if not playing:
+                return
+            episodes = self.get_episodes(
+                playing.get("anime_id", ""),
+                playing.get("provider"),
+                playing.get("category"),
+            )
+            if not episodes:
+                return
+            idx = next(
+                (i for i, e in enumerate(episodes)
+                 if float(e["episode_num"]) == float(playing.get("episode_num", -1))),
+                None,
+            )
+            if idx is None:
+                return
+            if action == "next_episode":
+                target = episodes[idx + 1] if idx + 1 < len(episodes) else episodes[0]
+            else:
+                target = episodes[idx - 1] if idx > 0 else episodes[-1]
+            self.play_episode(
+                playing.get("anime_id", ""),
+                target["episode_num"],
+                playing.get("player", "mpv"),
+                playing.get("provider"),
+                playing.get("category"),
+                playing.get("resolution", "auto"),
+            )
+        except Exception:
+            pass
+
+    def global_hotkeys_status(self) -> Dict:
+        """Current global-hotkey backend state for the status bar."""
+        if self._hotkeys is not None:
+            return {
+                "enabled": True,
+                "active": bool(getattr(self._hotkeys, "active", False)),
+                "error": str(getattr(self._hotkeys, "error", "") or ""),
+            }
+        return {"enabled": False, "active": False, "error": ""}
     @staticmethod
     def _is_usable_stream(result) -> bool:
         """A stream dict is usable only when it carries a real media URL."""
@@ -1861,7 +1999,9 @@ class JSApi:
             if not host.start():
                 return {"ok": False, "error": "Could not connect to Supabase Realtime."}
             self._watch_host = host
-            return {"ok": True, "code": host.code, "role": "host"}
+            result = {"ok": True, "code": host.code, "role": "host"}
+            result["hotkeys"] = self._start_global_hotkeys(host)
+            return result
         except Exception as exc:
             return {"ok": False, "error": str(exc)}
 
@@ -1883,6 +2023,7 @@ class JSApi:
     def leave_room(self) -> Dict:
         """Leave a Watch Together room (host or guest) and clean up."""
         result = {"ok": True}
+        self._stop_global_hotkeys()
         if self._watch_host is not None:
             try:
                 self._watch_host.stop()

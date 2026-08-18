@@ -73,6 +73,10 @@
 - `set_pause()` reads current state first, then sends `pause` only if mismatched (since `pause` toggles).
 - Guest VLC control lock: `--key-play= --key-jump+short= --key-jump+medium= --key-jump+long= --key-jump+extrashort= --key-next= --key-prev= --key-stop= --key-quit=` (inline empty values). **Never** pass empty-string values as separate argv entries (`--key-play=` `""`) — VLC treats the `""` as an empty MRL and opens a DVD instead of the URL.
 - Both `MpvIpcClient` and `VlcIpcClient` expose the same interface: `connect`, `close`, `get_time_pos`, `get_pause`, `set_pause`, `seek`, `connected`. Broadcasts stay player-agnostic JSON.
+- **Global hardware-level host controls** (`global_hotkeys.py`): zero-dependency system-wide hotkeys that work while the host is tabbed out (full-screen game/browser). Backends are stdlib `ctypes` only — Windows `RegisterHotKey` + `PeekMessageW` (`MOD_NOREPEAT`), Linux `XGrabKey` + `XNextEvent` on `libX11.so.6` with `XAllowEvents(ReplayKeyboard)` (Wayland detected → unsupported), macOS Carbon `RegisterEventHotKey` best-effort. Each backend runs its OS event loop on a daemon thread, never blocking the GUI/sync/IPC.
+- Hotkey specs are `mods+key` strings (`ctrl+alt+p`, `ctrl+alt+right`, `f9`); `win`/`super`/`meta`/`cmd`/`command` are all canonicalized to `win`; unknown modifiers are rejected (`parse_hotkey` → `(None, None)`). Defaults live in `settings.py`: `global_hotkeys_enabled=True`, `global_hotkey_play_pause=ctrl+alt+p`, seek forward/back = `ctrl+alt+right`/`left`, next/prev episode = `ctrl+alt+up`/`down`, `global_skip_seconds=10`.
+- `WatchHost.apply_global_action(action, skip_seconds)` is the fast path: it acts on the host player through thread-safe IPC and immediately broadcasts `PLAY`/`PAUSE`/`SEEK` (guests apply in `_on_message`, then heartbeat + `_enforce_authority` reconfirm). The sync loop shares its caches (`_last_broadcast_pause`, `_last_polled_time`, `_last_broadcast_seek_time`) with the hotkey thread under `_sync_lock` so they never double-broadcast or fight.
+- GUI wiring: `host_room` calls `_start_global_hotkeys(host)` (returns `hotkeys` flag in the result; tracks `global_hotkeys_status()`), `leave_room` calls `_stop_global_hotkeys()`. The listener callback `_on_global_hotkey` never blocks its daemon thread — every action is pushed onto a worker thread. Next/prev replays the current title's sibling episode via `_play_sibling_episode` (uses the `_playing` snapshot captured in `play_episode`, runs on a worker because `play_episode` blocks until the player exits).
 
 ## Key files
 | File | Purpose |
@@ -88,7 +92,8 @@
 | `api.py` | Arabic provider `AnimeAPI` |
 | `gui.py` | PyWebView GUI entry (`main`), `JSApi` JS bridge, resolve/abort pipeline |
 | `ui/index.html` | Webview SPA frontend (loaded by gui.py) |
-| `watch_together.py` | Watch Together: `SupabaseRealtime`, `MpvIpcClient`, `VlcIpcClient`, `WatchHost`/`WatchGuest` |
+| `watch_together.py` | Watch Together: `SupabaseRealtime`, `MpvIpcClient`, `VlcIpcClient`, `WatchHost`/`WatchGuest`, `apply_global_action` |
+| `global_hotkeys.py` | Zero-dependency global hotkeys (Windows `RegisterHotKey`, Linux `XGrabKey`, macOS Carbon), `GlobalHotkeyManager` |
 | `player.py` | `PlayerManager`: mpv/VLC arg builders, `build_vlc_args` (rc + lock flags) |
 | `playwright_bootstrap.py` | stdlib-only runtime Chromium auto-install (`ensure_playwright_chromium`) used by scrapers when the browser isn't bundled |
 

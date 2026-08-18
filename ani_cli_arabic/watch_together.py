@@ -46,6 +46,7 @@ from .player import PlayerManager
 ROOM_CODE_LEN = 6
 MAX_MEMBERS = 8
 PROTOCOL_VERSION = 2
+GLOBAL_SKIP_SECONDS = 10.0
 HEARTBEAT_INTERVAL = 3.0
 DRIFT_THRESHOLD = 1.5
 SYNC_HARD_SEEK_THRESHOLD = 2.5
@@ -710,6 +711,13 @@ class WatchHost:
         self._seq = 0
         self._epoch = 0
         self._session = 0
+        # Sync-loop caches shared with global-hotkey actions (guarded by
+        # ``_sync_lock`` so the hotkey thread and the loop never fight or
+        # double-broadcast the same host state change).
+        self._sync_lock = threading.Lock()
+        self._last_broadcast_pause: Optional[bool] = None
+        self._last_polled_time: Optional[float] = None
+        self._last_broadcast_seek_time: Optional[float] = None
         self.username = _os_username()
         self.members: Dict[str, str] = {self.username: ROLE_HOST}
         self._member_status: Dict[str, dict] = {}
@@ -944,6 +952,57 @@ class WatchHost:
         self._broadcast(EV_PAUSE, {})
         self._stop.set()
 
+    def apply_global_action(self, action: str, skip_seconds: Optional[float] = None):
+        """Apply a host control action from anywhere (global hotkey, CLI, ...).
+
+        Acts directly on the host's local player and immediately broadcasts
+        the resulting state to all guests (Protocol v2 fast path): guests
+        apply PLAY/PAUSE/SEEK in ``_on_message`` right away, then the next
+        heartbeat + their ``_enforce_authority`` pass reconfirm the state.
+
+        The shared sync-loop caches are updated under ``_sync_lock`` so the
+        loop never double-broadcasts or fights the action. Never raises;
+        returns ``{"ok": bool, ...}``.
+        """
+        if not self._active or self._ipc is None:
+            return {"ok": False, "error": "Room is not active"}
+        try:
+            if action in ("play_pause", "play", "pause"):
+                if action == "play_pause":
+                    paused = self._ipc.get_pause()
+                    if paused is None:
+                        return {"ok": False, "error": "Player state unavailable"}
+                    paused = not paused
+                else:
+                    paused = action == "pause"
+                self._ipc.set_pause(paused)
+                self._broadcast(EV_PAUSE if paused else EV_PLAY, {})
+                with self._sync_lock:
+                    self._last_broadcast_pause = paused
+                self._osd("Paused by host (global hotkey)" if paused
+                          else "Resumed by host (global hotkey)")
+                return {"ok": True, "action": action, "paused": paused}
+            if action in ("seek_forward", "seek_backward"):
+                step = float(skip_seconds if skip_seconds is not None
+                             else GLOBAL_SKIP_SECONDS)
+                pos = self._ipc.get_time_pos()
+                if pos is None:
+                    return {"ok": False, "error": "Player position unavailable"}
+                target = max(0.0, float(pos) + step) if action == "seek_forward" \
+                    else max(0.0, float(pos) - step)
+                self._ipc.seek(target)
+                self._broadcast(EV_SEEK, {"time": target})
+                with self._sync_lock:
+                    self._last_broadcast_seek_time = target
+                self._osd(
+                    f"Skip {'forward' if action == 'seek_forward' else 'backward'} "
+                    f"to {target:.0f}s"
+                )
+                return {"ok": True, "action": action, "time": target}
+        except (AttributeError, OSError, ConnectionError, ValueError):
+            pass
+        return {"ok": False, "error": "Player IPC unavailable"}
+
     def _reconnect_ipc(self) -> bool:
         """Reconnect a dropped IPC socket, retrying for up to
         RECONNECT_TIMEOUT seconds."""
@@ -958,8 +1017,6 @@ class WatchHost:
         if not self._ipc.connect(timeout=20.0):
             self._stop.set()
             return
-        prev_time: Optional[float] = None
-        prev_pause: Optional[bool] = None
         last_heartbeat = 0.0
         last_ping = 0.0
         while not self._stop.is_set():
@@ -975,17 +1032,30 @@ class WatchHost:
             time_pos = self._ipc.get_time_pos()
             paused = self._ipc.get_pause()
             now = time.time()
-            if paused is not None and paused != prev_pause:
+            with self._sync_lock:
+                last_pause = self._last_broadcast_pause
+            if paused is not None and paused != last_pause:
                 self._broadcast(EV_PAUSE if paused else EV_PLAY, {})
                 self._osd("Paused by host" if paused else "Resumed by host")
-                prev_pause = paused
-            if time_pos is not None and prev_time is not None:
-                delta = time_pos - prev_time
+                with self._sync_lock:
+                    self._last_broadcast_pause = paused
+            with self._sync_lock:
+                last_polled = self._last_polled_time
+            if time_pos is not None and last_polled is not None:
+                delta = time_pos - last_polled
                 if delta < -SEEK_BACKWARD_TOLERANCE or delta > SEEK_FORWARD_TOLERANCE:
-                    self._broadcast(EV_SEEK, {"time": time_pos})
-                    self._osd(f"Seeking to {time_pos:.0f}s")
+                    # A global-hotkey seek already broadcast this exact target;
+                    # skip the redundant duplicate (guests already got it).
+                    with self._sync_lock:
+                        already = self._last_broadcast_seek_time
+                    if already is None or abs(time_pos - already) > 0.5:
+                        self._broadcast(EV_SEEK, {"time": time_pos})
+                        self._osd(f"Seeking to {time_pos:.0f}s")
+                        with self._sync_lock:
+                            self._last_broadcast_seek_time = time_pos
             if time_pos is not None:
-                prev_time = time_pos
+                with self._sync_lock:
+                    self._last_polled_time = time_pos
             if now - last_heartbeat >= HEARTBEAT_INTERVAL:
                 self._broadcast(
                     EV_HEARTBEAT,

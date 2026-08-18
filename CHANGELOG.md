@@ -6,6 +6,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/) conventions. This
 
 ---
 
+## [Unreleased]
+
+### ⌨️ Global Hardware-Level Host Controls
+- System-wide Watch Together host hotkeys that work while the app is tabbed out (full-screen game/browser): play/pause, seek forward/backward, next/previous episode.
+- Zero-dependency implementation (`global_hotkeys.py`, stdlib `ctypes` only): Windows `RegisterHotKey`, Linux `XGrabKey` (X11; Wayland auto-detected → disabled), macOS Carbon best-effort. Each backend runs its own daemon event-loop thread.
+- Hotkey specs are `mods+key` (e.g. `ctrl+alt+p`); defaults are configurable via settings: `global_hotkey_play_pause`, `seek_forward`/`seek_backward`, `next_episode`/`prev_episode`, `global_skip_seconds=10`.
+- Actions route through `WatchHost.apply_global_action()` — a Protocol v2 fast path that drives the host player via thread-safe IPC and immediately broadcasts `PLAY`/`PAUSE`/`SEEK` to guests; the sync loop shares its broadcast caches under `_sync_lock` so it never double-broadcasts or fights a hotkey action.
+- Next/prev replays the current title's sibling episode using the `_playing` snapshot captured at playback start.
+- UI status: `host_room` now reports a `hotkeys` flag (backend live or not); `leave_room` cleanly stops the listener.
+
+---
+
 ## [v1.1.0] - 2026-08-18
 
 ### 🔒 Watch Together — Host-is-King protocol v2
