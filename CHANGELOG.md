@@ -10,6 +10,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/) conventions. This
 
 ---
 
+## [v1.5.1] - 2026-08-19
+
+### 🎨 Rebrand: Discord Rich Presence identity → AniNova
+
+- **Self-contained identity constants**: `DISCORD_CLIENT_ID`, `DISCORD_LOGO_URL`
+  and `DISCORD_LOGO_TEXT` now live in a prominent `DISCORD APPLICATION IDENTITY`
+  block at the top of `discord_rpc.py` (no longer imported from `config.py`),
+  with inline instructions for swapping in your own Discord Developer Portal
+  application ID.
+- **Branding scrub**: the small-image hover text was `ani-cli-arabic v1.5.0`;
+  it is now `AniNova v1.5.0`. Every presence payload (idle, search, playback,
+  Watch Together room, action buttons) now exclusively renders **AniNova**
+  branding — verified no payload contains the legacy `ani-cli-ar` string.
+- `config.py`'s `DISCORD_LOGO_TEXT` updated to the same `AniNova` branding for
+  consistency.
+- The bold top-level name Discord shows is the *application name* registered
+  for the Client ID in the Discord Developer Portal — a legacy "ani-cli-ar"
+  app. To rebrand, create a new "AniNova" application there and paste its
+  Application ID into `DISCORD_CLIENT_ID` at the top of `discord_rpc.py`.
+
+---
+
 ## [v1.5.0] - 2026-08-19
 
 ### ✨ New Feature: Discord Rich Presence

@@ -57,8 +57,33 @@ except ImportError:  # pragma: no cover - pypresence not installed
     PipeClosed = Exception
     ActivityType = None
 
-from .config import DISCORD_CLIENT_ID, DISCORD_LOGO_URL, DISCORD_LOGO_TEXT
 from .version import APP_VERSION
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DISCORD APPLICATION IDENTITY
+#
+# The **bold top-level name** Discord shows next to the Rich Presence is the
+# *application name* registered for this Client ID in the Discord Developer
+# Portal (https://discord.com/developers/applications). It currently belongs to
+# a legacy "ani-cli-ar" app, so Discord renders that old name.
+#
+# To rebrand to "AniNova", create your own application in the Developer Portal
+# (instructions at the bottom of this file), then paste its Application ID here
+# and add its assets (see below). That one change is all it takes:
+#
+#     DISCORD_CLIENT_ID = "<your-application-id>"
+#
+# NOTE: pypresence reads this ID over the local Discord IPC pipe; the ID never
+# leaves the machine. The Client ID also serves as a "secret" to NOBODY — it is
+# public by design (every Discord app ships it in its client bundle).
+# ─────────────────────────────────────────────────────────────────────────────
+DISCORD_CLIENT_ID = "1437470271895376063"
+
+# Large/small presence image shown next to the activity. Must be a public
+# http(s) URL — upload your own AniNova logo (e.g. to https://postimg.cc) and
+# paste the direct image link here. Small-text/branding always reads "AniNova".
+DISCORD_LOGO_URL = "https://i.postimg.cc/DydJfKY3/logo.gif"
+DISCORD_LOGO_TEXT = f"AniNova {APP_VERSION}"
 
 # Presence destinations for the action buttons (Discord requires https URLs).
 GITHUB_URL = "https://github.com/nobynoooob/AniNova"

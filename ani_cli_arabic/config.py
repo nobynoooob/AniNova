@@ -3,7 +3,7 @@ from .version import APP_VERSION
 CURRENT_VERSION = APP_VERSION
 DISCORD_CLIENT_ID = "1437470271895376063"
 DISCORD_LOGO_URL = "https://i.postimg.cc/DydJfKY3/logo.gif"
-DISCORD_LOGO_TEXT = f"ani-cli-arabic {APP_VERSION}"
+DISCORD_LOGO_TEXT = f"AniNova {APP_VERSION}"
 MYANIMELIST_API_BASE = "https://api.jikan.moe/v4/anime/"
 
 SUPABASE_DEFAULT_URL = "https://mxacanxpjkqeudlwzhwr.supabase.co"
