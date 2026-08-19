@@ -754,9 +754,10 @@ class PlayerManager:
         return True
 
     def _start_progress_poller(self, ipc_client, ipc_socket, proc, progress_cb):
-        """Start a daemon thread that samples mpv time-pos/duration and calls
-        ``progress_cb(pos, dur)`` every ~3s until the player exits. Best-effort;
-        never raises. Returns the thread (or None if IPC is unavailable)."""
+        """Start a daemon thread that samples mpv time-pos/duration/pause and
+        calls ``progress_cb(pos, dur, paused)`` every ~3s until the player
+        exits. Best-effort; never raises. Returns the thread (or None if IPC
+        is unavailable)."""
         try:
             import threading as _threading
             if ipc_client is None:
@@ -805,7 +806,7 @@ class PlayerManager:
             return None
 
     def _mpv_progress_loop(self, ipc_client, proc, progress_cb):
-        """Poll mpv position/duration until the process exits."""
+        """Poll mpv position/duration/pause until the process exits."""
         try:
             if not ipc_client.connected:
                 ipc_client.connect(timeout=_IPC_CONNECT_TIMEOUT)
@@ -814,13 +815,18 @@ class PlayerManager:
             while proc.poll() is None:
                 pos = ipc_client.get_time_pos()
                 dur = None
+                paused = None
                 if pos is not None:
                     try:
                         dur = ipc_client.request(["get_property", "duration"], timeout=1.0)
                     except Exception:
                         dur = None
                     try:
-                        progress_cb(float(pos), float(dur) if dur is not None else None)
+                        paused = ipc_client.get_pause()
+                    except Exception:
+                        paused = None
+                    try:
+                        progress_cb(float(pos), float(dur) if dur is not None else None, paused)
                     except Exception:
                         pass
                 time.sleep(3.0)

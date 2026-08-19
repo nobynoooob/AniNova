@@ -10,6 +10,40 @@ Format follows [Keep a Changelog](https://keepachangelog.com/) conventions. This
 
 ---
 
+## [v1.5.0] - 2026-08-19
+
+### ✨ New Feature: Discord Rich Presence
+
+The **Discord Rich Presence** setting is now fully functional with a complete
+background presence engine (`discord_rpc.py`):
+
+- **Idle / Browsing state**: shows *"Browsing Anime"* / *"Exploring AniNova"*
+  while exploring the catalog; searching switches to *"Searching for anime"*.
+- **Playback state**: WATCHING activity with the anime title, episode number
+  and a **live Discord-side elapsed timer** seeded from the mpv position (the
+  timer counts up in real time via Discord, so it stays accurate without RPC
+  spam). Pausing shows a *"Paused ·"* prefix and freezes the timer; resuming
+  re-seeds it at the correct offset. The anime poster is used as the large
+  presence image (falling back to the AniNova logo).
+- **Watch Together integration**: hosting a room shows *"Hosting a Watch
+  Together Room"*, joining shows *"Watching with friends"*, both with the room
+  code, a live member-count `party_size` and a `party_id`. During host
+  playback the presence combines the episode + room state in one activity.
+- **Settings toggle integration**: flipping the toggle ON initializes the RPC
+  immediately; flipping it OFF clears the presence and cleanly closes the
+  client (instant, non-blocking).
+- **Non-blocking & resilient**: all Discord IPC socket work runs on a single
+  background daemon thread — the GUI, mpv and the Watch Together sync loop are
+  never blocked. When Discord isn't running the engine retries silently on a
+  20s backoff with no log spam; dropped pipes auto-reconnect, and the player
+  pause feed is sourced from the host's already-polled state (no extra mpv IPC
+  contention in rooms).
+- **Buttons**: activity buttons link to the AniNova GitHub page / releases.
+- `pypresence` is now a declared dependency (was only a hidden build import,
+  which silently disabled the feature in packaged builds).
+
+---
+
 ## [v1.4.1] - 2026-08-18
 
 ### 🐛 Bug Fixes & Stability

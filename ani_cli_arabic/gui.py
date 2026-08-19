@@ -622,6 +622,13 @@ class JSApi:
         lang = "english" if "arabic" not in (language or "").lower() else "arabic"
         cache_key = f"{lang}:{query.lower()}"
 
+        # Discord Rich Presence: reflect the search action (non-blocking).
+        try:
+            from .discord_rpc import presence as _presence
+            _presence.set_browsing("search")
+        except Exception:
+            pass
+
         with self._lock:
             if cache_key in self._search_cache:
                 return self._search_cache[cache_key]
@@ -1586,6 +1593,7 @@ class JSApi:
         provider = provider or ep.get("provider")
         meta = self._anilist_details(anime_id) or {}
         title = meta.get("title") or self._anime_title(anime_id)
+        poster = (meta or {}).get("poster") or ""
 
         try:
             stream = self._resolve_stream(anime_id, ep_num, provider, category, resolution)
@@ -1691,12 +1699,46 @@ class JSApi:
                     auto_skip = None
 
         # Continue Watching: sample mpv time-pos/duration via IPC during playback
-        # and persist progress after the player exits (best-effort).
+        # and persist progress after the player exits (best-effort). The same
+        # feed also drives Discord Rich Presence for standalone playback.
         progress_holder = {"pos": None, "dur": None}
 
-        def _progress_cb(pos, dur):
+        def _progress_cb(pos, dur, paused=None):
             progress_holder["pos"] = pos
             progress_holder["dur"] = dur
+            # Watch Together rooms drive presence from the host sync loop (or
+            # keep the room presence for guests) — never double-drive it here.
+            if host is not None and getattr(host, "is_active", False):
+                return
+            if guest is not None and getattr(guest, "is_active", False):
+                return
+            try:
+                from .discord_rpc import presence as _presence
+                _presence.set_playback(
+                    title, int(float(ep_num)),
+                    playing=not bool(paused),
+                    position=pos, duration=dur, poster=poster,
+                )
+            except Exception:
+                pass
+
+        # Watch Together host room: feed Discord playback presence from the
+        # host's already-polled state (host.poll_state) on a daemon thread, so
+        # the RPC never opens its own mpv IPC socket nor contends with the
+        # sync loop for mpv's single-threaded command queue.
+        feed_stop = threading.Event()
+        feed_thread = None
+        if host is not None and getattr(host, "is_active", False):
+            try:
+                feed_thread = threading.Thread(
+                    target=self._feed_host_presence,
+                    args=(host, title, int(float(ep_num)), poster, feed_stop),
+                    daemon=True,
+                    name="presence-host-feed",
+                )
+                feed_thread.start()
+            except Exception:
+                feed_thread = None
 
         try:
             self._player_mgr().play_with_quality_fallback(
@@ -1714,6 +1756,12 @@ class JSApi:
                 auto_skip=auto_skip,
             )
         except Exception as exc:
+            feed_stop.set()
+            if feed_thread is not None:
+                try:
+                    feed_thread.join(timeout=2.0)
+                except Exception:
+                    pass
             if host is not None and getattr(host, "is_active", False):
                 try:
                     host.notify_stop(session=session)
@@ -1721,9 +1769,21 @@ class JSApi:
                     pass
             return {"ok": False, "error": f"Failed to launch {player_choice}: {exc}"}
 
+        # Playback ended (or never started): stop the presence feeder and drop
+        # back to browsing — or the room presence when a room is still active.
+        feed_stop.set()
+        if feed_thread is not None:
+            try:
+                feed_thread.join(timeout=2.0)
+            except Exception:
+                pass
+        try:
+            self._refresh_presence_after_playback()
+        except Exception:
+            pass
+
         # Persist playback progress for the Continue Watching row.
         try:
-            poster = (meta or {}).get("poster") or ""
             self._history_mgr().record_progress(
                 anime_id,
                 int(ep_num),
@@ -1741,6 +1801,64 @@ class JSApi:
             except Exception:
                 pass
         return {"ok": True, "player": player_choice, "url": url}
+
+    def _feed_host_presence(self, host, title, ep_num, poster, stop_evt) -> None:
+        """Feed Discord playback presence from the Watch Host's already-polled
+        mpv state (``host.poll_state``) so the RPC never opens its own IPC
+        socket nor contends with the host sync loop for mpv's single-threaded
+        command queue. Runs on a daemon thread; exits when the player stops."""
+        try:
+            while not stop_evt.is_set():
+                state = None
+                try:
+                    state = host.poll_state()
+                except Exception:
+                    state = None
+                if state and len(state) >= 3 and state[0] is not None:
+                    pos = None
+                    try:
+                        pos = float(state[0])
+                    except (TypeError, ValueError):
+                        pos = None
+                    paused = bool(state[1]) if state[1] is not None else None
+                    try:
+                        from .discord_rpc import presence as _presence
+                        _presence.set_playback(
+                            title, int(float(ep_num)),
+                            playing=not bool(paused),
+                            position=pos,
+                            poster=poster,
+                            room="host",
+                            code=host.code,
+                            members=len(getattr(host, "members", {}) or {}),
+                        )
+                    except Exception:
+                        pass
+                stop_evt.wait(5.0)
+        except Exception:
+            pass
+
+    def _refresh_presence_after_playback(self) -> None:
+        """After a player exits, show the Watch Together room presence when a
+        room is still active, otherwise return to browsing."""
+        try:
+            from .discord_rpc import presence as _presence
+            host = self._watch_host
+            guest = self._watch_guest
+            if host is not None and getattr(host, "is_active", False):
+                _presence.set_room(
+                    "host", host.code,
+                    len(getattr(host, "members", {}) or {}),
+                )
+            elif guest is not None and getattr(guest, "is_active", False):
+                _presence.set_room(
+                    "guest", guest.code,
+                    len(getattr(guest, "members", {}) or {}),
+                )
+            else:
+                _presence.set_idle()
+        except Exception:
+            pass
 
     def get_continue_watching(self, limit: int = 12) -> List[Dict]:
         """Return continue-watching items (from local playback history),
@@ -1844,6 +1962,7 @@ class JSApi:
         except Exception as exc:
             return {"ok": False, "settings": {}, "error": str(exc)}
         changed_hotkeys = False
+        discord_changed = None
         saved = 0
         for key, raw in patch.items():
             if key not in _SETTING_ALL_KEYS:
@@ -1852,6 +1971,8 @@ class JSApi:
             if value is None:
                 continue
             s.settings[key] = value
+            if key == "discord_rpc":
+                discord_changed = bool(value)
             if key in _SETTING_HOTKEY_KEYS:
                 changed_hotkeys = True
             saved += 1
@@ -1859,6 +1980,16 @@ class JSApi:
             s.save()
         except Exception as exc:
             return {"ok": False, "settings": self.get_settings(), "error": str(exc)}
+
+        # Live side effect: Discord Rich Presence toggling initializes/clears
+        # the RPC connection immediately (non-blocking — the presence keeper
+        # thread owns all socket work).
+        if discord_changed is not None:
+            try:
+                from .discord_rpc import presence as _presence
+                _presence.set_enabled(discord_changed)
+            except Exception:
+                pass
 
         # Live side effect: if the host room is running, re-arm the global
         # hotkey listener so new bindings/toggles take effect immediately.
@@ -2220,6 +2351,14 @@ class JSApi:
             self._watch_host = host
             result = {"ok": True, "code": host.code, "role": "host"}
             result["hotkeys"] = self._start_global_hotkeys(host)
+            try:
+                from .discord_rpc import presence as _presence
+                _presence.set_room(
+                    "host", host.code,
+                    len(getattr(host, "members", {}) or {}),
+                )
+            except Exception:
+                pass
             return result
         except Exception as exc:
             return {"ok": False, "error": str(exc)}
@@ -2235,6 +2374,11 @@ class JSApi:
             if not guest.start():
                 return {"ok": False, "error": "Could not connect to the room."}
             self._watch_guest = guest
+            try:
+                from .discord_rpc import presence as _presence
+                _presence.set_room("guest", guest.code, 1)
+            except Exception:
+                pass
             return {"ok": True, "code": code, "role": "guest"}
         except Exception as exc:
             return {"ok": False, "error": str(exc)}
@@ -2255,6 +2399,11 @@ class JSApi:
             except Exception as exc:
                 result = {"ok": False, "error": str(exc)}
             self._watch_guest = None
+        try:
+            from .discord_rpc import presence as _presence
+            _presence.clear_room()
+        except Exception:
+            pass
         return result
 
     def watch_status(self) -> Dict:
@@ -2269,15 +2418,27 @@ class JSApi:
         """Return the current Watch Together roster (``[{"name", "role"}...]``)
         so the status bar can show who is in the room."""
         if self._watch_host is not None:
-            return [
+            members = [
                 {"name": name, "role": role}
                 for name, role in self._watch_host.members.items()
             ]
+            try:
+                from .discord_rpc import presence as _presence
+                _presence.set_room("host", self._watch_host.code, len(members))
+            except Exception:
+                pass
+            return members
         if self._watch_guest is not None:
-            return [
+            members = [
                 {"name": name, "role": role}
                 for name, role in self._watch_guest.members.items()
             ]
+            try:
+                from .discord_rpc import presence as _presence
+                _presence.set_room("guest", self._watch_guest.code, len(members))
+            except Exception:
+                pass
+            return members
         return []
 
 
@@ -2318,6 +2479,14 @@ def run_gui(debug: bool = False) -> None:
         min_size=(760, 540),
         text_select=True,
     )
+    # Start Discord Rich Presence from the Settings toggle (non-blocking;
+    # the presence keeper thread owns all Discord IPC socket work).
+    try:
+        from .discord_rpc import presence as _presence
+        from .settings import SettingsManager
+        _presence.set_enabled(bool(SettingsManager().get("discord_rpc", True)))
+    except Exception:
+        pass
     try:
         webview.start(debug=debug, gui=None)
     except Exception as exc:  # pragma: no cover - GUI backend failures
@@ -2325,6 +2494,11 @@ def run_gui(debug: bool = False) -> None:
     finally:
         try:
             api.leave_room()
+        except Exception:
+            pass
+        try:
+            from .discord_rpc import presence as _presence
+            _presence.shutdown()
         except Exception:
             pass
 
