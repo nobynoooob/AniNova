@@ -64,20 +64,14 @@ from .version import APP_VERSION
 #
 # The **bold top-level name** Discord shows next to the Rich Presence is the
 # *application name* registered for this Client ID in the Discord Developer
-# Portal (https://discord.com/developers/applications). It currently belongs to
-# a legacy "ani-cli-ar" app, so Discord renders that old name.
-#
-# To rebrand to "AniNova", create your own application in the Developer Portal
-# (instructions at the bottom of this file), then paste its Application ID here
-# and add its assets (see below). That one change is all it takes:
-#
-#     DISCORD_CLIENT_ID = "<your-application-id>"
+# Portal (https://discord.com/developers/applications). This ID belongs to the
+# official "AniNova" application, so Discord renders the AniNova name.
 #
 # NOTE: pypresence reads this ID over the local Discord IPC pipe; the ID never
 # leaves the machine. The Client ID also serves as a "secret" to NOBODY — it is
 # public by design (every Discord app ships it in its client bundle).
 # ─────────────────────────────────────────────────────────────────────────────
-DISCORD_CLIENT_ID = "1437470271895376063"
+DISCORD_CLIENT_ID = "1539513639390675035"
 
 # Large/small presence image shown next to the activity. Must be a public
 # http(s) URL — upload your own AniNova logo (e.g. to https://postimg.cc) and
