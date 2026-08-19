@@ -10,6 +10,37 @@ Format follows [Keep a Changelog](https://keepachangelog.com/) conventions. This
 
 ---
 
+## [v1.6.0] - 2026-08-19
+
+### ✨ New Feature: Rich Presence GitHub Button & Dynamic Tooltips
+
+- **Single interactive button**: every Discord Rich Presence state now shows one
+  "AniNova on GitHub" button linking to the AniNova repository, replacing the
+  previous per-mode "Watch on AniNova" / "Get AniNova" buttons.
+- **Dynamic small-image hover tooltips**: the small-image tooltip now adapts to
+  the current activity instead of always showing the branding text:
+  - Paused playback → `Paused at MM:SS` (auto-rolls to `H:MM:SS` past an hour).
+  - Watch Together host/guest → `Host (X member(s))` / `Guest in Room`.
+  - Browsing / searching → `Browsing AniNova`.
+  - Normal playback keeps the `AniNova vX.Y.Z` branding.
+
+### 🛡️ New Privacy Setting: Show Watch Together Room Code on Discord
+
+- **New toggle** under the Privacy section of the Settings menu:
+  *"Show Watch Together Room Code on Discord"* (default **ON**), with the
+  description *"Allow friends on Discord to see your active Watch Together room
+  code."*
+- **ON**: the presence renders `Room #CODE (X/8)` (or `Hosting Room #CODE`
+  during playback) and sets the party id, so friends can read and join the room.
+- **OFF**: the code is masked — `In a Watch Together Room (X/8)` (or `Hosting a
+  Watch Together Room` during playback) — and the party id is omitted entirely.
+- Stored as `show_rpc_room_code` in `~/.ani-cli-arabic/database/config.json`
+  (single source of truth: `config.SHOW_RPC_ROOM_CODE_DEFAULT`), exposed via
+  the settings bridge, and applied **live** to the running presence engine as
+  soon as the toggle is saved — no app restart needed.
+
+---
+
 ## [v1.5.1] - 2026-08-19
 
 ### 🎨 Rebrand: Discord Rich Presence identity → AniNova

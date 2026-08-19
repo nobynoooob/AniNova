@@ -4,6 +4,9 @@ CURRENT_VERSION = APP_VERSION
 DISCORD_CLIENT_ID = "1437470271895376063"
 DISCORD_LOGO_URL = "https://i.postimg.cc/DydJfKY3/logo.gif"
 DISCORD_LOGO_TEXT = f"AniNova {APP_VERSION}"
+# Default for the "Show Watch Together Room Code on Discord" privacy toggle
+# (the single source of truth; settings.py and discord_rpc.py read this).
+SHOW_RPC_ROOM_CODE_DEFAULT = True
 MYANIMELIST_API_BASE = "https://api.jikan.moe/v4/anime/"
 
 SUPABASE_DEFAULT_URL = "https://mxacanxpjkqeudlwzhwr.supabase.co"

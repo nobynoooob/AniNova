@@ -1996,6 +1996,15 @@
           </div>
           <div class="set-row">
             <div class="set-label">
+              <div class="set-name">Show Watch Together Room Code on Discord</div>
+              <div class="set-desc">Allow friends on Discord to see your active Watch Together room code.</div>
+            </div>
+            <div class="set-field">
+              <label class="switch"><input type="checkbox" id="setShowRoomCode"><span class="slider"></span></label>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-label">
               <div class="set-name">Anonymous analytics</div>
               <div class="set-desc">Share anonymous usage stats to improve the app. No personal data.</div>
             </div>
@@ -2141,6 +2150,7 @@
     { id: "setPreferredLang", key: "preferred_language" },
     { id: "setPreferredProvider", key: "preferred_provider" },
     { id: "setDiscordRpc", key: "discord_rpc", bool: true },
+    { id: "setShowRoomCode", key: "show_rpc_room_code", bool: true },
     { id: "setAnalytics", key: "analytics", bool: true }
   ];
 

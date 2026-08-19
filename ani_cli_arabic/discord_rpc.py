@@ -79,9 +79,8 @@ DISCORD_CLIENT_ID = "1539513639390675035"
 DISCORD_LOGO_URL = "https://i.postimg.cc/DydJfKY3/logo.gif"
 DISCORD_LOGO_TEXT = f"AniNova {APP_VERSION}"
 
-# Presence destinations for the action buttons (Discord requires https URLs).
+# Presence destination for the action button (Discord requires an https URL).
 GITHUB_URL = "https://github.com/nobynoooob/AniNova"
-RELEASE_URL = f"{GITHUB_URL}/releases"
 
 # Watch Together room party size cap (matches watch_together.MAX_MEMBERS).
 MAX_PARTY = 8
@@ -115,6 +114,20 @@ def _clamp(text: Any, limit: int = _MAX_LINE) -> str:
     return s
 
 
+def _fmt_ts(seconds: Optional[float]) -> str:
+    """Format a playback position as ``MM:SS`` (or ``H:MM:SS`` past an hour)."""
+    try:
+        total = max(0.0, float(seconds))
+    except (TypeError, ValueError):
+        total = 0.0
+    total = int(total)
+    h, rem = divmod(total, 3600)
+    m, s = divmod(rem, 60)
+    if h:
+        return f"{h}:{m:02d}:{s:02d}"
+    return f"{m:02d}:{s:02d}"
+
+
 class DiscordPresence:
     """Thread-safe Discord Rich Presence manager (single shared instance)."""
 
@@ -130,6 +143,19 @@ class DiscordPresence:
         self._last_key: Optional[str] = None
         self._last_send: float = 0.0
         self._force_send = False
+        # Privacy setting: whether the Watch Together room code may be shown on
+        # Discord. Mirrors the ``show_rpc_room_code`` setting (default True),
+        # read once at startup and kept live via ``set_room_code_visible``.
+        self._show_room_code = self._read_room_code_setting()
+
+    @staticmethod
+    def _read_room_code_setting() -> bool:
+        try:
+            from .config import SHOW_RPC_ROOM_CODE_DEFAULT
+            from .settings import SettingsManager
+            return bool(SettingsManager().get("show_rpc_room_code", SHOW_RPC_ROOM_CODE_DEFAULT))
+        except Exception:
+            return True
 
     # ------------------------------------------------------------------
     # public API (never blocks; only mutates state + wakes the keeper)
@@ -226,6 +252,14 @@ class DiscordPresence:
                     self._fields.pop(key, None)
         self._wake.set()
 
+    def set_room_code_visible(self, visible: bool) -> None:
+        """Privacy toggle: whether the Watch Together room code appears on
+        Discord (state line + ``party_id``). Flipping it re-renders the active
+        presence immediately; hidden codes show "In a Watch Together Room"."""
+        with self._lock:
+            self._show_room_code = bool(visible)
+        self._wake.set()
+
     def shutdown(self) -> None:
         """Stop the keeper and clear/close the RPC client (GUI exit)."""
         self._running = False
@@ -259,6 +293,7 @@ class DiscordPresence:
                 "enabled": self._enabled,
                 "connected": self._rpc is not None,
                 "mode": self._mode,
+                "show_room_code": self._show_room_code,
                 "fields": dict(self._fields),
             }
 
@@ -370,24 +405,24 @@ class DiscordPresence:
         with self._lock:
             mode = self._mode
             fields = dict(self._fields)
+            show_code = self._show_room_code
 
-        buttons = self._buttons(mode)
         common = {
             "small_image": DISCORD_LOGO_URL,
-            "small_text": DISCORD_LOGO_TEXT,
-            "buttons": buttons,
+            "buttons": _BUTTONS,
             "activity_type": ActivityType.PLAYING if ActivityType is not None else 0,
         }
 
         if mode == _MODE_PLAYBACK:
-            return self._playback_payload(fields, common)
+            return self._playback_payload(fields, common, show_code)
         if mode == _MODE_ROOM:
-            return self._room_payload(fields, common)
+            return self._room_payload(fields, common, show_code)
         if mode == _MODE_SEARCH:
             return {
                 **common,
                 "details": "Searching for anime",
                 "state": "Exploring AniNova",
+                "small_text": "Browsing AniNova",
                 "large_image": DISCORD_LOGO_URL,
                 "large_text": DISCORD_LOGO_TEXT,
             }
@@ -395,31 +430,37 @@ class DiscordPresence:
             **common,
             "details": "Browsing Anime",
             "state": "Exploring AniNova",
+            "small_text": "Browsing AniNova",
             "large_image": DISCORD_LOGO_URL,
             "large_text": DISCORD_LOGO_TEXT,
         }
 
-    def _playback_payload(self, fields: Dict[str, Any], common: Dict[str, Any]) -> Dict[str, Any]:
+    def _playback_payload(self, fields: Dict[str, Any], common: Dict[str, Any], show_code: bool) -> Dict[str, Any]:
         title = fields.get("title") or "Anime"
         episode = fields.get("episode") or ""
         playing = bool(fields.get("playing"))
         position = fields.get("position")
         poster = fields.get("poster")
-
-        state_line = f"Episode {episode}" if episode else "Now Playing"
         room = fields.get("room")
         code = fields.get("code")
+        members = int(fields.get("members") or 1)
+
+        state_line = f"Episode {episode}" if episode else "Now Playing"
+        small_text = DISCORD_LOGO_TEXT
         if room:
             prefix = "Hosting" if str(room) == "host" else "In"
-            state_line = f"{state_line}  ·  {prefix} Room {code}"
-        if not playing:
+            state_line = f"{state_line}  ·  {prefix} {self._room_label(code, members, show_code)}"
+            small_text = self._room_tooltip(str(room), members)
+        elif not playing:
             state_line = f"Paused · {state_line}"
+            small_text = f"Paused at {_fmt_ts(position)}"
 
         payload = {
             **common,
             "activity_type": ActivityType.WATCHING if ActivityType is not None else 3,
             "details": _clamp(title),
             "state": _clamp(state_line),
+            "small_text": _clamp(small_text),
             "large_image": self._image(poster),
             "large_text": _clamp(title),
         }
@@ -429,26 +470,58 @@ class DiscordPresence:
             except (TypeError, ValueError):
                 pass
         if room:
-            payload["party_id"] = "wt-" + str(code or "")
-            payload["party_size"] = [int(fields.get("members") or 1), MAX_PARTY]
+            payload["party_size"] = [members, MAX_PARTY]
+            if show_code and code:
+                payload["party_id"] = "wt-" + str(code)
         return payload
 
-    def _room_payload(self, fields: Dict[str, Any], common: Dict[str, Any]) -> Dict[str, Any]:
+    def _room_payload(self, fields: Dict[str, Any], common: Dict[str, Any], show_code: bool) -> Dict[str, Any]:
         role = str(fields.get("role") or "guest")
         code = fields.get("code") or ""
+        members = int(fields.get("members") or 1)
         details = (
             "Hosting a Watch Together Room" if role == "host"
             else "Watching with friends"
         )
-        return {
+        payload = {
             **common,
             "details": details,
-            "state": _clamp(f"Room {code}") if code else "Watch Together",
+            "state": _clamp(self._room_label(code, members, show_code, full=True)),
+            "small_text": _clamp(self._room_tooltip(role, members)),
             "large_image": DISCORD_LOGO_URL,
             "large_text": "AniNova Watch Together",
-            "party_id": "wt-" + str(code or ""),
-            "party_size": [int(fields.get("members") or 1), MAX_PARTY],
+            "party_size": [members, MAX_PARTY],
         }
+        if show_code and code:
+            payload["party_id"] = "wt-" + str(code)
+        return payload
+
+    @staticmethod
+    def _room_label(code: str, members: int, show_code: bool, full: bool = False) -> str:
+        """Room line rendered in the presence state.
+
+        ``show_code`` ON renders "Room #CODE", OFF masks the code. ``full``
+        (room-only presence) appends the party count "(X/MAX)". The non-full
+        variant is appended after "Hosting"/"In" in the playback line, so the
+        hidden form returns "a Watch Together Room" → "Hosting a Watch
+        Together Room" / "In a Watch Together Room"."""
+        if show_code and code:
+            label = f"Room #{code}"
+        elif full:
+            label = "In a Watch Together Room"
+        else:
+            label = "a Watch Together Room"
+        if full:
+            label = f"{label} ({members}/{MAX_PARTY})"
+        return label
+
+    @staticmethod
+    def _room_tooltip(role: str, members: int) -> str:
+        """Dynamic small-image tooltip for Watch Together contexts."""
+        if str(role) == "host":
+            count = max(1, int(members))
+            return f"Host ({count} member{'s' if count != 1 else ''})"
+        return "Guest in Room"
 
     def _image(self, poster: Optional[str]) -> str:
         """Return a valid presence image. External http(s) poster URLs are
@@ -457,10 +530,10 @@ class DiscordPresence:
             return str(poster)
         return DISCORD_LOGO_URL
 
-    def _buttons(self, mode: str) -> list:
-        if mode == _MODE_PLAYBACK:
-            return [{"label": "Watch on AniNova", "url": GITHUB_URL}]
-        return [{"label": "Get AniNova", "url": RELEASE_URL}]
+
+# Single interactive button shown in every presence state, pointing at the
+# AniNova GitHub repository/releases page.
+_BUTTONS = [{"label": "AniNova on GitHub", "url": GITHUB_URL}]
 
 
 # Shared singleton so GUI wiring can ``from .discord_rpc import presence``.

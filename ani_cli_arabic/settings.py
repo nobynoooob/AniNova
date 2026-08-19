@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from .config import SHOW_RPC_ROOM_CODE_DEFAULT
 from .storage import atomic_write_json
 
 class SettingsManager:
@@ -57,6 +58,7 @@ class SettingsManager:
             "player": "ask",
             "auto_next": False,
             "discord_rpc": True,
+            "show_rpc_room_code": SHOW_RPC_ROOM_CODE_DEFAULT,
             "theme": "sunrise",
             "analytics": True,
             "preferred_language": "Arabic Sub",

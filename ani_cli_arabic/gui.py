@@ -84,6 +84,7 @@ _SETTING_ALL_KEYS = (
     "player",
     "auto_next",
     "discord_rpc",
+    "show_rpc_room_code",
     "theme",
     "analytics",
     "preferred_language",
@@ -104,7 +105,7 @@ _SETTING_ALL_KEYS = (
     "auto_skip_osd",
 )
 _SETTING_BOOL_KEYS = frozenset({
-    "auto_next", "discord_rpc", "analytics", "mpv_custom_keys",
+    "auto_next", "discord_rpc", "show_rpc_room_code", "analytics", "mpv_custom_keys",
     "preroll_enabled", "global_hotkeys_enabled", "auto_skip_enabled",
     "auto_skip_osd",
 })
@@ -1963,6 +1964,7 @@ class JSApi:
             return {"ok": False, "settings": {}, "error": str(exc)}
         changed_hotkeys = False
         discord_changed = None
+        room_code_changed = None
         saved = 0
         for key, raw in patch.items():
             if key not in _SETTING_ALL_KEYS:
@@ -1973,6 +1975,8 @@ class JSApi:
             s.settings[key] = value
             if key == "discord_rpc":
                 discord_changed = bool(value)
+            if key == "show_rpc_room_code":
+                room_code_changed = bool(value)
             if key in _SETTING_HOTKEY_KEYS:
                 changed_hotkeys = True
             saved += 1
@@ -1988,6 +1992,15 @@ class JSApi:
             try:
                 from .discord_rpc import presence as _presence
                 _presence.set_enabled(discord_changed)
+            except Exception:
+                pass
+
+        # Live side effect: the Watch Together room-code visibility toggle
+        # re-renders the active presence so hidden/visible codes apply at once.
+        if room_code_changed is not None:
+            try:
+                from .discord_rpc import presence as _presence
+                _presence.set_room_code_visible(room_code_changed)
             except Exception:
                 pass
 
