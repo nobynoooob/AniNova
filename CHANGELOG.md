@@ -10,6 +10,49 @@ Format follows [Keep a Changelog](https://keepachangelog.com/) conventions. This
 
 ---
 
+## [v1.7.0] - 2026-08-19
+
+### 📊 Telemetry Engine Rewrite (Async, Batched, Privacy-First)
+
+The analytics system (ported from ani-cli-ar) was rebuilt around a single
+async worker so telemetry can never block playback, resolving, or the UI:
+
+- **Async batched sender**: one daemon worker owns all network I/O; every
+  `track_*` call is an O(1) queue push. Events are drained and POSTed as a
+  batch (`{client: "AniNova", client_version, events: [...]}`) every 20 events
+  or 10 seconds, with a per-event fallback to the legacy single-event shape for
+  older server deployments.
+- **Hard privacy opt-out**: the existing *Anonymous analytics* toggle in the
+  Privacy settings now live-controls the engine via `set_enabled()`. Turning it
+  OFF clears the pending queue and stops/joins the worker thread — **zero
+  network calls are made while disabled**. Heartbeats run inside the same
+  worker and die with it. (Previously only the per-send setting was checked and
+  the heartbeat thread kept spinning.)
+- **Privacy hardening**: the legacy `user_name` context field was removed from
+  payloads; only coarse OS/version context is attached.
+
+### 🎯 AniNova-Specific Events
+
+- **Watch Together**: `room_event` tracks host vs. guest engagement
+  (create / join / leave / end) with member counts — room codes are never sent.
+- **Discord Rich Presence**: `rpc_event` tracks coarse engagement
+  (enable / disable / connect).
+- **Auto-Skip**: `skip_event` records OP/ED skips actually performed.
+- **Themes**: `theme_event` records the active theme on save.
+- **Search**: `search_event` counts searches by catalog language (Arabic vs.
+  English) — the query text is never transmitted.
+- **Playback & sessions**: `app_start`, `app_session_end`, `heartbeat`, and
+  `video_play` (with player/provider/quality/ui/watch-duration) are now wired
+  into the GUI startup and playback flows.
+
+### 🌐 Server Compatibility
+
+- `analytics_server/main.py` now accepts both the legacy single-event payload
+  and the new batched `{client, client_version, events: [...]}` payload,
+  inserting each event as a row (backward compatible with the old client).
+
+---
+
 ## [v1.6.0] - 2026-08-19
 
 ### ✨ New Feature: Rich Presence GitHub Button & Dynamic Tooltips

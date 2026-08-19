@@ -307,6 +307,13 @@ class AutoSkipMonitor:
                 cb(interval.end, interval.skip_type)
             except Exception:
                 pass
+        # Telemetry: an Auto-Skip actually fired (op/ed/recap) — fire on the
+        # async analytics worker, never here.
+        try:
+            from .monitoring import monitor
+            monitor.track_skip(interval.skip_type)
+        except Exception:
+            pass
 
     def _loop(self) -> None:
         dead_polls = 0

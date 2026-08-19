@@ -630,6 +630,14 @@ class JSApi:
         except Exception:
             pass
 
+        # Telemetry: count searches by catalog language only (never the query
+        # text) on the async analytics worker.
+        try:
+            from .monitoring import monitor
+            monitor.track_search(lang)
+        except Exception:
+            pass
+
         with self._lock:
             if cache_key in self._search_cache:
                 return self._search_cache[cache_key]
@@ -1741,6 +1749,15 @@ class JSApi:
             except Exception:
                 feed_thread = None
 
+        # Telemetry: mark active playback for the session heartbeat (fire on
+        # the async analytics worker — never blocks the launch).
+        watch_started = time.time()
+        try:
+            from .monitoring import monitor
+            monitor.set_activity("watching", title, ep_num)
+        except Exception:
+            pass
+
         try:
             self._player_mgr().play_with_quality_fallback(
                 url,
@@ -1763,6 +1780,11 @@ class JSApi:
                     feed_thread.join(timeout=2.0)
                 except Exception:
                     pass
+            try:
+                from .monitoring import monitor
+                monitor.set_activity("idle")
+            except Exception:
+                pass
             if host is not None and getattr(host, "is_active", False):
                 try:
                     host.notify_stop(session=session)
@@ -1801,6 +1823,21 @@ class JSApi:
                 host.notify_stop(session=session)
             except Exception:
                 pass
+
+        # Telemetry: playback ended — report the session and return to idle.
+        try:
+            from .monitoring import monitor
+            monitor.track_video_play(
+                title, ep_num,
+                player=player_choice,
+                provider=provider or "",
+                quality=resolution,
+                watch_start=watch_started,
+                watch_end=time.time(),
+            )
+            monitor.set_activity("idle")
+        except Exception:
+            pass
         return {"ok": True, "player": player_choice, "url": url}
 
     def _feed_host_presence(self, host, title, ep_num, poster, stop_evt) -> None:
@@ -1965,6 +2002,8 @@ class JSApi:
         changed_hotkeys = False
         discord_changed = None
         room_code_changed = None
+        analytics_changed = None
+        theme_changed = None
         saved = 0
         for key, raw in patch.items():
             if key not in _SETTING_ALL_KEYS:
@@ -1977,6 +2016,10 @@ class JSApi:
                 discord_changed = bool(value)
             if key == "show_rpc_room_code":
                 room_code_changed = bool(value)
+            if key == "analytics":
+                analytics_changed = bool(value)
+            if key == "theme":
+                theme_changed = str(value or "")
             if key in _SETTING_HOTKEY_KEYS:
                 changed_hotkeys = True
             saved += 1
@@ -2001,6 +2044,23 @@ class JSApi:
             try:
                 from .discord_rpc import presence as _presence
                 _presence.set_room_code_visible(room_code_changed)
+            except Exception:
+                pass
+
+        # Live side effect: the analytics Privacy toggle hard-stops (or starts)
+        # the telemetry worker — zero network calls while disabled.
+        if analytics_changed is not None:
+            try:
+                from .monitoring import monitor
+                monitor.set_enabled(analytics_changed)
+            except Exception:
+                pass
+
+        # Telemetry: theme usage (non-identifying, coarse).
+        if theme_changed:
+            try:
+                from .monitoring import monitor
+                monitor.track_theme(theme_changed)
             except Exception:
                 pass
 
@@ -2372,6 +2432,11 @@ class JSApi:
                 )
             except Exception:
                 pass
+            try:
+                from .monitoring import monitor
+                monitor.track_watch_together("host", "create", 1)
+            except Exception:
+                pass
             return result
         except Exception as exc:
             return {"ok": False, "error": str(exc)}
@@ -2392,6 +2457,11 @@ class JSApi:
                 _presence.set_room("guest", guest.code, 1)
             except Exception:
                 pass
+            try:
+                from .monitoring import monitor
+                monitor.track_watch_together("guest", "join", 1)
+            except Exception:
+                pass
             return {"ok": True, "code": code, "role": "guest"}
         except Exception as exc:
             return {"ok": False, "error": str(exc)}
@@ -2405,12 +2475,22 @@ class JSApi:
                 self._watch_host.stop()
             except Exception as exc:
                 result = {"ok": False, "error": str(exc)}
+            try:
+                from .monitoring import monitor
+                monitor.track_watch_together("host", "end", 1)
+            except Exception:
+                pass
             self._watch_host = None
         if self._watch_guest is not None:
             try:
                 self._watch_guest.stop()
             except Exception as exc:
                 result = {"ok": False, "error": str(exc)}
+            try:
+                from .monitoring import monitor
+                monitor.track_watch_together("guest", "leave", 1)
+            except Exception:
+                pass
             self._watch_guest = None
         try:
             from .discord_rpc import presence as _presence
@@ -2483,6 +2563,14 @@ def run_gui(debug: bool = False) -> None:
         )
         return
     api = JSApi()
+    # Telemetry: report app launch and open the async session (heartbeats +
+    # app_session_end are handled by the analytics worker thread).
+    try:
+        from .monitoring import monitor
+        monitor.track_app_start()
+        monitor.track_app_session()
+    except Exception:
+        pass
     window = webview.create_window(
         f"AniNova AR {APP_VERSION}",
         _index_html_path(),
@@ -2512,6 +2600,11 @@ def run_gui(debug: bool = False) -> None:
         try:
             from .discord_rpc import presence as _presence
             _presence.shutdown()
+        except Exception:
+            pass
+        try:
+            from .monitoring import monitor
+            monitor.shutdown()
         except Exception:
             pass
 

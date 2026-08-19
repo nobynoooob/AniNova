@@ -16,10 +16,13 @@ from supabase import create_client, Client
 
 
 class MonitorPayload(BaseModel):
-    fingerprint: str
-    timestamp: str
-    action: str
+    fingerprint: str = ""
+    timestamp: str = ""
+    action: str = ""
     details: Dict[str, Any] = {}
+    client: str = ""
+    client_version: str = ""
+    events: Optional[list] = None
 
 
 app = FastAPI(title="ani-cli-arabic Analytics Server")
@@ -60,19 +63,40 @@ def monitor(
 ):
     _check_auth(x_auth_key)
 
-    row = {
-        "fingerprint": payload.fingerprint,
-        "timestamp": payload.timestamp,
-        "action": payload.action,
-        "details": payload.details,
-    }
+    # Accept both the legacy single-event shape and the batched shape the
+    # AniNova client sends ({fingerprint, client, client_version, events: []}).
+    rows = []
+    if payload.events:
+        for ev in payload.events:
+            if not isinstance(ev, dict):
+                continue
+            rows.append({
+                "fingerprint": ev.get("fingerprint") or payload.fingerprint,
+                "timestamp": ev.get("timestamp") or payload.timestamp,
+                "action": ev.get("action") or payload.action,
+                "details": ev.get("details") or {},
+            })
+    else:
+        rows.append({
+            "fingerprint": payload.fingerprint,
+            "timestamp": payload.timestamp,
+            "action": payload.action,
+            "details": payload.details,
+        })
+
+    if not rows:
+        raise HTTPException(status_code=400, detail="No valid events in payload")
 
     try:
-        result = get_supabase().table(TABLE_NAME).insert(row).execute()
+        table = get_supabase().table(TABLE_NAME)
+        inserted = 0
+        for row in rows:
+            result = table.insert(row).execute()
+            inserted += len(result.data) if result.data else 0
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to insert: {exc}")
 
-    return {"status": "ok", "inserted": len(result.data) if result.data else 0}
+    return {"status": "ok", "inserted": inserted}
 
 
 @app.get("/stats")

@@ -172,6 +172,13 @@ class DiscordPresence:
             self._fields = {}
         self._ensure_thread()
         self._wake.set()
+        # Telemetry: coarse Rich Presence engagement (enable/disable). Fire on
+        # the async analytics worker; never blocking.
+        try:
+            from .monitoring import monitor
+            monitor.track_rpc("enable" if enabled else "disable")
+        except Exception:
+            pass
 
     def set_idle(self) -> None:
         """Show the browsing presence ("Browsing Anime" / "Exploring AniNova")."""
@@ -350,6 +357,12 @@ class DiscordPresence:
             self._last_key = None
             self._last_send = 0.0
             self._force_send = True
+            # Telemetry: presence successfully handshook with Discord.
+            try:
+                from .monitoring import monitor
+                monitor.track_rpc("connect")
+            except Exception:
+                pass
             return True
         except Exception:
             self._rpc = None
