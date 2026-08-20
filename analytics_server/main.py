@@ -237,7 +237,7 @@ def overview(
             "Authorization": f"Bearer {SUPABASE_KEY}",
         }
         params: Dict[str, Any] = {
-            "select": "client,action,client_version,timestamp",
+            "select": "client,action,client_version,fingerprint,timestamp",
             "order": "timestamp.desc",
             "limit": "2000",
         }
