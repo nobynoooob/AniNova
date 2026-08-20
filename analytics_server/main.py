@@ -65,6 +65,12 @@ def monitor(
 
     # Accept both the legacy single-event shape and the batched shape the
     # AniNova client sends ({fingerprint, client, client_version, events: []}).
+    #
+    # Client isolation: the AniNova client always tags itself ("AniNova");
+    # anything arriving in the legacy single-event shape without a client tag
+    # (the old ani-cli-ar client sends none) is stored as "legacy".
+    batch_client = (payload.client or "AniNova").strip() or "legacy"
+    batch_client_version = (payload.client_version or "").strip()
     rows = []
     if payload.events:
         for ev in payload.events:
@@ -75,6 +81,8 @@ def monitor(
                 "timestamp": ev.get("timestamp") or payload.timestamp,
                 "action": ev.get("action") or payload.action,
                 "details": ev.get("details") or {},
+                "client": (ev.get("client") or batch_client).strip() or "legacy",
+                "client_version": (ev.get("client_version") or batch_client_version).strip(),
             })
     else:
         rows.append({
@@ -82,6 +90,8 @@ def monitor(
             "timestamp": payload.timestamp,
             "action": payload.action,
             "details": payload.details,
+            "client": (payload.client or "legacy").strip() or "legacy",
+            "client_version": (payload.client_version or "").strip(),
         })
 
     if not rows:
@@ -103,11 +113,18 @@ def monitor(
 def stats(
     fingerprint: str = "",
     limit: int = 500,
+    client: str = "AniNova",
     x_auth_key: Optional[str] = Header(default=None),
 ):
-    """Return an aggregated streaming-history summary for a fingerprint."""
+    """Return an aggregated streaming-history summary for a fingerprint.
+
+    By default this isolates **AniNova** telemetry (``client=AniNova``) from
+    legacy ani-cli-ar events. Pass ``client=legacy`` (or ``client=all``) to
+    change the scope. RLS still scopes rows to the ``x-fingerprint`` header.
+    """
     _check_auth(x_auth_key)
     limit = max(1, min(int(limit), 2000))
+    client = (client or "AniNova").strip() or "AniNova"
 
     try:
         headers = {
@@ -123,6 +140,8 @@ def stats(
         if fingerprint:
             params["fingerprint"] = f"eq.{fingerprint}"
             headers["x-fingerprint"] = fingerprint
+        if client != "all":
+            params["client"] = f"eq.{client}"
 
         resp = requests.get(
             f"{SUPABASE_URL}/rest/v1/{TABLE_NAME}",
@@ -179,6 +198,7 @@ def stats(
     return {
         "source": "remote",
         "fingerprint": fingerprint,
+        "client": client,
         "total_plays": total,
         "unique_titles": len(titles),
         "recent_7d": recent_7d,
@@ -192,4 +212,76 @@ def stats(
         "by_player": dict(players),
         "by_provider": dict(providers),
         "by_quality": dict(qualities),
+    }
+
+
+@app.get("/overview")
+def overview(
+    client: str = "AniNova",
+    days: int = 30,
+    x_auth_key: Optional[str] = Header(default=None),
+):
+    """Dashboard-friendly aggregate: event counts by action for a client.
+
+    Defaults to ``client=AniNova`` so the AniNova dashboard never mixes in
+    legacy ani-cli-ar events. ``client=all`` removes the filter; ``days``
+    bounds the window (0 = all time).
+    """
+    _check_auth(x_auth_key)
+    client = (client or "AniNova").strip() or "AniNova"
+    days = max(0, min(int(days), 3650))
+
+    try:
+        headers = {
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}",
+        }
+        params: Dict[str, Any] = {
+            "select": "client,action,client_version,timestamp",
+            "order": "timestamp.desc",
+            "limit": "2000",
+        }
+        if client != "all":
+            params["client"] = f"eq.{client}"
+        if days > 0:
+            cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+            params["timestamp"] = f"gte.{cutoff}"
+
+        resp = requests.get(
+            f"{SUPABASE_URL}/rest/v1/{TABLE_NAME}",
+            params=params,
+            headers=headers,
+            timeout=10,
+        )
+        resp.raise_for_status()
+        rows = resp.json()
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Failed to query telemetry: {exc}")
+
+    if not isinstance(rows, list):
+        raise HTTPException(status_code=502, detail="Unexpected response from telemetry store")
+
+    by_action: Counter = Counter()
+    by_client: Counter = Counter()
+    by_version: Counter = Counter()
+    unique_devices: Dict[str, set] = {}  # client -> set of distinct fingerprints
+    for row in rows:
+        row_client = str(row.get("client") or "legacy")
+        by_action[f"{row_client}:{str(row.get('action') or 'unknown')}"] += 1
+        by_client[row_client] += 1
+        version = str(row.get("client_version") or "")
+        if version:
+            by_version[f"{row_client}:{version}"] += 1
+        fp = str(row.get("fingerprint") or "")
+        if fp:
+            unique_devices.setdefault(row_client, set()).add(fp)
+
+    return {
+        "client": client,
+        "days": days,
+        "total_events": len(rows),
+        "unique_devices": {c: len(fps) for c, fps in unique_devices.items()},
+        "by_client": dict(by_client),
+        "by_version": dict(by_version),
+        "by_action": dict(by_action),
     }

@@ -4,6 +4,8 @@ CREATE TABLE IF NOT EXISTS public.usage_logs (
     timestamp TIMESTAMPTZ NOT NULL,
     action TEXT NOT NULL,
     details JSONB NOT NULL DEFAULT '{}'::jsonb,
+    client TEXT NOT NULL DEFAULT 'legacy',
+    client_version TEXT NOT NULL DEFAULT '',
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -15,6 +17,14 @@ CREATE INDEX IF NOT EXISTS idx_usage_logs_fingerprint
 
 CREATE INDEX IF NOT EXISTS idx_usage_logs_timestamp
     ON public.usage_logs (timestamp DESC);
+
+-- Isolate AniNova telemetry from legacy ani-cli-ar telemetry: the dashboard
+-- filters on `client`, so index the client+action pair for fast scans.
+CREATE INDEX IF NOT EXISTS idx_usage_logs_client_action
+    ON public.usage_logs (client, action);
+
+CREATE INDEX IF NOT EXISTS idx_usage_logs_client_timestamp
+    ON public.usage_logs (client, timestamp DESC);
 
 ALTER TABLE public.usage_logs ENABLE ROW LEVEL SECURITY;
 
