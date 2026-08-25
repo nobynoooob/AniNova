@@ -53,9 +53,10 @@
     align-items: center;
     gap: 16px;
     padding: 12px 20px;
-    background: rgba(18, 18, 18, .82);
+    background: linear-gradient(180deg, rgba(24, 22, 21, .88), rgba(18, 18, 18, .82));
     border-bottom: 1px solid var(--border-soft);
-    backdrop-filter: blur(10px);
+    backdrop-filter: blur(14px) saturate(1.25);
+    -webkit-backdrop-filter: blur(14px) saturate(1.25);
     flex: 0 0 auto;
   }
   .brand {
@@ -96,12 +97,14 @@
     font-weight: 600;
     padding: 8px 14px;
     border-radius: 22px;
+    transition: background .18s, color .18s, border-color .18s, transform .18s;
   }
-  .nav-link:hover { color: var(--text); background: var(--panel); border-color: var(--border-soft); }
+  .nav-link:hover { color: var(--text); background: var(--panel); border-color: var(--border-soft); transform: translateY(-1px); }
   .nav-link.active {
     background: var(--sunrise-soft);
     color: var(--accent-2);
     border-color: rgba(255, 126, 95, .35);
+    box-shadow: inset 0 0 12px rgba(255, 126, 95, .06);
   }
   .nav-search {
     flex: 1;
@@ -136,8 +139,9 @@
     justify-content: center;
     font-size: 15px;
     color: var(--muted);
+    transition: color .18s, border-color .18s, transform .18s, box-shadow .18s;
   }
-  .icon-btn:hover { color: var(--text); border-color: var(--accent); }
+  .icon-btn:hover { color: var(--text); border-color: var(--accent); transform: translateY(-1px) scale(1.06); box-shadow: 0 4px 14px rgba(0,0,0,.35); }
   .icon-btn .badge {
     position: absolute;
     top: -2px; right: -2px;
@@ -167,16 +171,23 @@
     font-size: 14px;
     font-weight: 600;
     font-family: var(--font);
-    transition: background .15s, border-color .15s, transform .05s, filter .15s;
+    transition: background .18s, border-color .18s, transform .12s, filter .18s, box-shadow .2s, color .18s;
   }
   button:hover { background: #2e2e2e; border-color: #444; }
-  button:active { transform: translateY(1px); }
+  button:active { transform: translateY(1px) scale(.985); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   button.primary {
     background: var(--sunrise);
     border: none;
     color: #fff;
+    box-shadow: 0 6px 18px rgba(255, 126, 95, .28);
   }
-  button.primary:hover { filter: brightness(1.1); }
+  button.primary:hover {
+    filter: brightness(1.08);
+    box-shadow: 0 10px 26px rgba(255, 126, 95, .42);
+    transform: translateY(-1px);
+  }
+  button.primary:active { transform: translateY(0) scale(.98); }
 
   /* ---------- update banner ---------- */
   .update-banner {
@@ -230,18 +241,36 @@
     position: absolute;
     inset: 0;
     overflow-y: auto;
+    overflow-x: hidden;
     padding: 22px 22px 60px;
     display: none;
   }
-  .view.active { display: block; }
+  .view.active { display: block; animation: viewIn .28s cubic-bezier(.2,.8,.3,1); }
+  @keyframes viewIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
   .section-title {
-    font-size: 13px;
+    font-size: 13.5px;
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: 1.1px;
     color: var(--muted);
     margin: 6px 2px 14px;
-    font-weight: 700;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    gap: 10px;
   }
+  .section-title::before {
+    content: "";
+    width: 4px;
+    height: 16px;
+    border-radius: 3px;
+    background: var(--sunrise);
+    box-shadow: 0 0 8px rgba(255, 126, 95, .45);
+    flex: 0 0 auto;
+  }
+  html[dir="rtl"] .section-title { letter-spacing: 0; }
 
   /* ---------- home: featured hero carousel ---------- */
   .featured-hero {
@@ -343,8 +372,11 @@
     color: var(--text);
     font-size: 18px;
     line-height: 1;
+    backdrop-filter: blur(6px);
+    transition: border-color .18s, color .18s, background .18s, transform .18s;
   }
-  .fnav:hover { border-color: var(--accent); color: var(--accent-2); }
+  .fnav:hover { border-color: var(--accent); color: var(--accent-2); background: rgba(46, 40, 38, .92); transform: scale(1.08); }
+  .fnav:active { transform: scale(.96); }
 
   /* ---------- home: weekly schedule bar ---------- */
   .schedule-wrap { max-width: 1500px; margin: 0 auto 30px; }
@@ -362,6 +394,7 @@
     border-radius: 12px;
     color: var(--muted);
     cursor: pointer;
+    transition: transform .18s, border-color .18s, box-shadow .2s, background .18s;
   }
   .day-pill .day-name {
     font-size: 11px;
@@ -369,8 +402,8 @@
     text-transform: uppercase;
     letter-spacing: .8px;
   }
-  .day-pill .day-date { font-size: 13px; font-weight: 700; color: var(--text); }
-  .day-pill:hover { border-color: var(--accent); }
+  .day-pill .day-date { font-size: 13px; font-weight: 700; color: var(--text); transition: color .18s; }
+  .day-pill:hover { border-color: var(--accent); transform: translateY(-2px); }
   .day-pill.active {
     background: var(--sunrise);
     border-color: transparent;
@@ -429,8 +462,11 @@
     color: var(--text);
     text-align: left;
     cursor: pointer;
+    transition: border-color .18s, transform .18s, background .18s, box-shadow .2s;
   }
-  .top10-row:hover { border-color: var(--accent); transform: translateX(2px); }
+  .top10-row:hover { border-color: var(--accent); transform: translateX(3px); box-shadow: 0 4px 14px rgba(0,0,0,.3); }
+  .top10-row:hover .name { color: var(--accent-2); }
+  .top10-row .name { transition: color .18s; }
   .top10-row .rank {
     width: 30px;
     height: 56px;                 /* match the thumb height so the number
@@ -473,8 +509,11 @@
   .top10-row .sub { font-size: 11px; color: var(--muted); }
 
   /* horizontal scroll strip */
-  .strip { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 10px; scrollbar-width: thin; }
-  .strip .card { flex: 0 0 auto; width: 150px; }
+  .strip { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 10px; scrollbar-width: thin; scrollbar-color: #3a3a3a transparent; }
+  .strip::-webkit-scrollbar { height: 8px; }
+  .strip::-webkit-scrollbar-thumb { background: #333; border-radius: 6px; }
+  .strip::-webkit-scrollbar-thumb:hover { background: #444; }
+  .strip .card { flex: 0 0 auto; width: 170px; }
 
   /* ---------- grid & cards ---------- */
   .grid {
@@ -488,13 +527,18 @@
     border-radius: var(--radius);
     overflow: hidden;
     cursor: pointer;
-    transition: transform .15s, border-color .15s, box-shadow .15s;
+    transition: transform .22s cubic-bezier(.2,.8,.3,1), border-color .2s, box-shadow .25s;
+    will-change: transform;
   }
   .card:hover {
-    transform: translateY(-3px);
-    border-color: var(--accent);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, .45);
+    transform: translateY(-5px);
+    border-color: var(--sunrise-border);
+    box-shadow: 0 14px 34px rgba(0, 0, 0, .5), 0 0 0 1px rgba(255, 126, 95, .18), 0 6px 26px rgba(255, 126, 95, .12);
   }
+  .card .poster-wrap { overflow: hidden; }
+  .card .poster-wrap .poster,
+  .card > img.poster { transition: transform .35s cubic-bezier(.2,.8,.3,1); }
+  .card:hover .poster { transform: scale(1.055); }
   .card .poster {
     aspect-ratio: 2 / 3;
     width: 100%;
@@ -563,8 +607,12 @@
   .card .provider {
     margin-top: 6px;
     font-size: 11px;
+    letter-spacing: .2px;
     color: var(--muted);
     text-transform: capitalize;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   /* ---------- card hover overlay (synopsis/rating/status) ---------- */
@@ -737,9 +785,9 @@
     font-weight: 700;
     text-align: center;
     padding: 6px;
-    transition: transform .12s, border-color .12s, background .12s, box-shadow .12s;
+    transition: transform .16s cubic-bezier(.2,.8,.3,1), border-color .16s, background .16s, box-shadow .2s;
   }
-  .ep-row:hover { transform: translateY(-2px); border-color: var(--accent); }
+  .ep-row:hover { transform: translateY(-3px) scale(1.04); border-color: var(--accent); box-shadow: 0 6px 16px rgba(0,0,0,.35); z-index: 1; }
   .ep-row .num { line-height: 1; }
   .ep-row .name { display: none; }
   .ep-row.active {
@@ -965,17 +1013,26 @@
     align-items: center;
     justify-content: center;
     background: rgba(0, 0, 0, .6);
-    backdrop-filter: blur(4px);
+    backdrop-filter: blur(6px) saturate(1.1);
   }
-  .wt-modal.show { display: flex; }
+  .wt-modal.show { display: flex; animation: modalIn .22s cubic-bezier(.2,.8,.3,1); }
+  @keyframes modalIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
   .wt-modal-card {
     width: min(440px, 92vw);
-    background: var(--panel-2);
+    background: linear-gradient(180deg, rgba(38, 36, 35, .97), rgba(30, 30, 30, .97));
     border: 1px solid var(--border);
     border-radius: 18px;
-    box-shadow: var(--shadow);
+    box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, .05);
     padding: 20px;
     color: var(--text);
+    animation: cardIn .26s cubic-bezier(.2,.8,.3,1);
+  }
+  @keyframes cardIn {
+    from { opacity: 0; transform: translateY(14px) scale(.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
   }
   .wt-modal-head {
     display: flex;
@@ -1073,15 +1130,16 @@
     bottom: 26px;
     left: 50%;
     transform: translateX(-50%);
-    background: #2a2a2a;
+    background: rgba(42, 42, 42, .96);
+    backdrop-filter: blur(8px);
     border: 1px solid var(--border);
     padding: 12px 20px;
-    border-radius: 10px;
+    border-radius: 12px;
     font-size: 14px;
     z-index: 99;
     display: none;
     max-width: 80vw;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, .5);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 255, 255, .05);
   }
   #toast.show { display: block; animation: rise .18s ease; }
   #toast.error { border-color: var(--danger); color: var(--danger); }
@@ -1218,12 +1276,13 @@
     width: min(560px, 94vw);
     max-height: 420px;
     flex-direction: column;
-    background: var(--panel-2);
+    background: linear-gradient(180deg, rgba(38, 36, 35, .98), rgba(30, 30, 30, .98));
     border: 1px solid var(--border);
     border-radius: 16px;
-    box-shadow: 0 24px 70px rgba(0, 0, 0, .55);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .05);
     overflow: hidden;
     color: var(--text);
+    animation: cardIn .2s cubic-bezier(.2,.8,.3,1);
   }
   .search-drop.show { display: flex; }
   .search-drop-head {
@@ -1352,20 +1411,21 @@
     align-items: center;
     justify-content: center;
     background: rgba(0, 0, 0, .6);
-    backdrop-filter: blur(4px);
+    backdrop-filter: blur(6px) saturate(1.1);
   }
-  .set-modal.show { display: flex; }
+  .set-modal.show { display: flex; animation: modalIn .22s cubic-bezier(.2,.8,.3,1); }
   .set-card {
     width: min(600px, 94vw);
     max-height: 88vh;
-    background: var(--panel-2);
+    background: linear-gradient(180deg, rgba(38, 36, 35, .97), rgba(30, 30, 30, .97));
     border: 1px solid var(--border);
     border-radius: 18px;
-    box-shadow: var(--shadow);
+    box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, .05);
     padding: 20px;
     color: var(--text);
     display: flex;
     flex-direction: column;
+    animation: cardIn .26s cubic-bezier(.2,.8,.3,1);
   }
   .set-head {
     display: flex;
@@ -1535,6 +1595,14 @@
 
   /* ---------- RTL support ---------- */
   html[dir="rtl"] body { direction: rtl; font-family: var(--font-ar); }
+  /* Cairo must also win on elements that set their own font-family */
+  html[dir="rtl"] button,
+  html[dir="rtl"] input,
+  html[dir="rtl"] select,
+  html[dir="rtl"] textarea { font-family: var(--font-ar); }
+  /* Mixed-direction text (English descriptions inside Arabic UI) renders
+     cleanly per-paragraph instead of scrambling punctuation. */
+  .f-desc, .hc-synopsis, .synopsis .text, .alt-titles { unicode-bidi: plaintext; }
   html[dir="rtl"] .topnav { flex-direction: row-reverse; }
   html[dir="rtl"] .nav-links { flex-direction: row-reverse; }
   html[dir="rtl"] .nav-end { flex-direction: row-reverse; }
@@ -1546,6 +1614,7 @@
   html[dir="rtl"] .set-card { text-align: right; }
   html[dir="rtl"] .set-row { flex-direction: row-reverse; }
   html[dir="rtl"] .set-label { text-align: right; }
+  html[dir="rtl"] .set-scroll { margin: 10px 0 0 -4px; padding-right: 0; padding-left: 4px; }
   html[dir="rtl"] .home-columns { flex-direction: row-reverse; }
   html[dir="rtl"] .details-topbar { flex-direction: row-reverse; }
   html[dir="rtl"] .details-crumbs { margin-left: 0; margin-right: 12px; }
@@ -1559,17 +1628,33 @@
   html[dir="rtl"] .preroll-card { direction: rtl; }
   html[dir="rtl"] .hotkey-hint { text-align: right; }
   html[dir="rtl"] .search-drop { direction: rtl; }
+  html[dir="rtl"] .search-drop-head { flex-direction: row-reverse; }
   html[dir="rtl"] .set-actions { flex-direction: row-reverse; }
-  html[dir="rtl"] .card .title,
-  html[dir="rtl"] .f-title,
-  html[dir="rtl"] .featured-hero,
-  html[dir="rtl"] .top10-row .name,
-  html[dir="rtl"] .schedule-card .title { font-family: var(--font-ar); }
   html[dir="rtl"] .update-banner { flex-direction: row-reverse; }
   html[dir="rtl"] .wt-bar { flex-direction: row-reverse; }
   html[dir="rtl"] .play-row { flex-direction: row-reverse; }
   html[dir="rtl"] .empty, html[dir="rtl"] .grid { direction: rtl; }
   html[dir="rtl"] .top10-num { margin-left: 0; margin-right: auto; }
+  /* rows & lists read right-to-left */
+  html[dir="rtl"] .top10-row, html[dir="rtl"] .search-row { text-align: right; flex-direction: row-reverse; }
+  html[dir="rtl"] .top10-row:hover { transform: translateX(-3px); }
+  html[dir="rtl"] .top10-row .info { align-items: flex-end; }
+  /* absolute-positioned badges mirror to the visual right in RTL */
+  html[dir="rtl"] .card .badge,
+  html[dir="rtl"] .schedule-card .badge.eps { left: auto; right: 8px; }
+  html[dir="rtl"] .schedule-card .badge.air { right: auto; left: 8px; }
+  html[dir="rtl"] .card .bookmark-ic { right: auto; left: 8px; }
+  html[dir="rtl"] .icon-btn .badge { right: auto; left: -2px; }
+  /* hero carousel controls mirror */
+  html[dir="rtl"] .featured-dots { left: auto; right: 46px; }
+  html[dir="rtl"] .featured-nav { right: auto; left: 18px; }
+  /* settings switch knob slides from the right edge */
+  html[dir="rtl"] .switch .slider::before { left: auto; right: 3px; }
+  html[dir="rtl"] .switch input:checked + .slider::before { transform: translateX(-20px); }
+  /* continue-watching progress fills from the right */
+  html[dir="rtl"] .continue-card .progress-track { direction: ltr; left: auto; right: 0; width: 100%; }
+  html[dir="rtl"] .continue-card .progress-fill { float: right; border-radius: 6px 0 0 6px; background: linear-gradient(270deg, var(--accent), var(--accent-2)); }
+  html[dir="rtl"] .section-title { flex-direction: row-reverse; }
 </style>
 </head>
 <body>
@@ -1675,11 +1760,11 @@
       <div class="anime-hero">
           <div class="anime-poster-wrap">
             <div class="anime-poster" id="heroPoster"></div>
-            <button class="bookmark-btn" id="btnBookmark" title="Add to My List">
-              <span class="bm-ic">▱</span> <span class="bm-label">My List</span>
+            <button class="bookmark-btn" id="btnBookmark">
+              <span class="bm-ic">▱</span> <span class="bm-label" data-i18n="bookmark.my_list">My List</span>
             </button>
             <button class="wt-launch-btn" id="btnWatchTogether">
-              <span class="wt-ic">👥</span> WATCH2GETHER
+              <span class="wt-ic">👥</span> <span data-i18n="action.watch_together">WATCH2GETHER</span>
             </button>
           </div>
 
@@ -1688,7 +1773,7 @@
           <div class="alt-titles" id="detAltTitles"></div>
           <div class="synopsis">
             <div class="text" id="detSynopsis"></div>
-            <button class="synopsis-toggle" id="synToggle">Show more</button>
+            <button class="synopsis-toggle" id="synToggle" data-i18n="details.show_more">Show more</button>
           </div>
         </div>
 
@@ -1697,11 +1782,11 @@
             <div class="rating-badge"><span class="star">★</span><span id="detScore"></span></div>
           </div>
           <div class="fact-block">
-            <div class="fact-label">Details</div>
+            <div class="fact-label" data-i18n="details.fact_details">Details</div>
             <div class="meta-pills" id="detPills"></div>
           </div>
           <div class="fact-block">
-            <div class="fact-label">Genres</div>
+            <div class="fact-label" data-i18n="details.genres">Genres</div>
             <div class="genres-row" id="detGenres"></div>
           </div>
         </div>
@@ -1724,7 +1809,7 @@
             <div class="shade"></div>
             <div class="play-launch">
               <div class="play-disc"><span>▶</span></div>
-              <div class="play-launch-title" id="epDetailTitle">Select an episode</div>
+              <div class="play-launch-title" id="epDetailTitle" data-i18n="details.select_episode">Select an episode</div>
               <div class="play-launch-sub" id="epDetailSub"></div>
               <div class="play-row">
                 <span class="hint" data-i18n="details.play_with">Play with</span>
@@ -2071,7 +2156,7 @@
       <div class="preroll-media" id="prerollMedia">
         <video id="prerollVideo" autoplay playsinline></video>
         <div class="preroll-spinner" id="prerollSpinner"><div class="ring"></div></div>
-        <div class="preroll-message" id="prerollMessage">Preparing your stream…</div>
+        <div class="preroll-message" id="prerollMessage" data-i18n="preroll.preparing">Preparing your stream…</div>
       </div>
       <div class="preroll-timer" id="prerollTimer">
         <span class="preroll-count" id="prerollCount">5</span>
@@ -2210,6 +2295,9 @@
       "badge.sources": "{n} sources", "badge.source": "1 source",
       "badge.tv": "TV", "badge.movie": "MOVIE", "badge.ova": "OVA", "badge.special": "SPECIAL",
       "action.watch_free": "▶ WATCH FREE",
+      "action.watch_together": "WATCH2GETHER",
+      "details.fact_details": "Details",
+      "search.searching": "Searching…",
       "details.panel_title": "DETAILS",
       "details.genres_label": "GENRES",
       "details.status_label": "Status",
@@ -2376,8 +2464,11 @@
       "days.thu": "الخميس", "days.fri": "الجمعة", "days.sat": "السبت",
        "badge.featured": "مميز", "badge.trending": "رائج", "badge.free": "مجاني",
        "badge.sources": "{n} مصادر", "badge.source": "مصدر واحد",
-       "badge.tv": "مسلسل", "badge.movie": "فيلم", "badge.ova": "OVA", "badge.special": "خاص",
-       "action.watch_free": "▶ شاهد مجاناً",
+      "badge.tv": "مسلسل", "badge.movie": "فيلم", "badge.ova": "OVA", "badge.special": "خاص",
+      "action.watch_free": "▶ شاهد مجاناً",
+      "action.watch_together": "شاهد معًا",
+      "details.fact_details": "التفاصيل",
+      "search.searching": "جاري البحث…",
        "details.panel_title": "التفاصيل",
        "details.genres_label": "التصنيفات",
        "details.status_label": "الحالة",
@@ -2626,12 +2717,78 @@
        return animeObj.title_arabic;
      }
      
-     if (animeObj && animeObj.native) {
-       return animeObj.native;
-     }
-     
-     return title;
-   }
+      if (animeObj && animeObj.native) {
+        return animeObj.native;
+      }
+
+      return title;
+    }
+
+  // ---------- Arabic description localization ----------
+  // Resolution order: API-provided Arabic field -> curated dictionary ->
+  // original text (rendered cleanly via unicode-bidi: plaintext in CSS).
+  const DESCRIPTIONS_AR = {
+    "naruto shippuden": "يناوزكي بعد ثلاث سنوات من التدريب مع جيرايا، يعود ناروتو أوزوماكي إلى قرية الكونفدرالية الخفية في الأوراق لملاقاة أعداء أقوى ومنظمة أكاتسكي الغامضة.",
+    "attack on titan": "بعد أن دمر عمالقة أسوار مدينتهم، يتعهد إرين ييغر بالقضاء على كل عملاق، ليكشف مع مرور الزمن أسرارًا مروعة عن العالم وخلف الأسوار العظيمة.",
+    "death note": "يجد الطالب الموهوب لايت ياغامي دفترًا خارقًا يقتل كل من يُكتب اسمه فيه، فبدأت لعبة ذكاء قاتلة بينه وبين المحقق الغامض إل.",
+    "one piece": "يبحر مونكي دي لوفي وطاقمه من القراصنة عبر جراند لاين بحثًا عن كنز ون بيس الأسطوري ليصبح ملك القراصنة.",
+    "fullmetal alchemist: brotherhood": "بعد تجربة كيميائية كارثية فقد فيها إدوارد إلريك ذراعه وأخاه ألفونس جسده، ينطلق الأخوان في رحلة للعثور على حجر الفيلسوف واستعادة ما فُقد.",
+    "demon slayer": "بعدما ذُبح عائلته وتحوّلت أخته إلى شيطان، ينضم تانجيرو كامادو إلى فيلق قتال الشياطين لانتقم ويعيد أخته إلى إنسانيتها.",
+    "my hero academia": "في عالم حيث يمتلك معظم البشر قدرات خارقة، يحلم إيزوكو ميدوريا الصبي بلا قدرة بأن يصبح أعظم بطل، حتى يمنحه أكبر الأبطال قوته الخارقة.",
+    "jujutsu kaisen": "يبتلع طالب ثانوي إصبعًا ملعونًا فيصبح وعاءً للملوث سوكونا، فيلتحق بمدرسة السحر في طوكيو لمواجهة اللعنات وجمع بقية الإصبع الخطيرة.",
+    "spy x family": "جاسوس محترف يبني عائلة زائفة لتنفيذ مهمة مستحيلة، لا يعلم أن زوجته قاتلة مأجورة وابنته تقرأ الأفكار.",
+    "chainsaw man": "دينجي صياد شياطين فقير يندمج مع حيوانه الأليف بوتشي ليصبح رجل المنشار، وينضم إلى منظمة صيادي الشياطين العامة.",
+    "sword art online": "يعلق آلاف اللاعبين داخل لعبة واقع افتراضي قاتلة حيث الموت في اللعبة يعني الموت في الواقع، ويقود كيريتو حملة التحرر.",
+    "tokyo ghoul": "في مدينة طوكيو تمتلئ بأشباح آكلة للبشر، يجد الطالب كانيكي نفسه نصف غول بعد عملية زراعة غامضة.",
+    "hunter x hunter": "ينطلق غون فريكسس في رحلة ليصبح صيادًا مثل والده ويكتشف مغامرات وأصدقاء وأعداء في عالم مليء بالأسرار.",
+    "steins gate": "عالِم مجنون يكتشف بطريق الخطأ طريقة لإرسال الرسائل إلى الماضي، فتنقلب خطوط الزمن ويجب عليه تصحيح أخطاء لم يرتكبها بعد.",
+    "code geass": "بعد حصوله على قوة الأمر المطلق تسمى جيس، يقود الأمير ليلوش تمردًا ضد الإمبراطورية البريطانية الانتقامية مقنعًا بوجه قناع.",
+    "one punch man": "ساتاما بطل هواية تدرب حتى فقد شعره، أصبح قويًا لدرجة أنه يهزم أي عدو بلكمة واحدة، فيبحث عن تحدٍ يستحق الانتظار.",
+    "vinland saga": "في عصر الفايكنغ، ينضم ثورفين الشاب إلى فرقة مرتزقة انتقامًا لوالده بينما يتعلم المعنى الحقيقي للمحارب الحقيقي.",
+    "mob psycho 100": "موب صبي متوسط بمقدرات نفسية هائلة يحاول عيش حياة طبيعية مع مساعده الروحي المشبوه ريجن، لكن قوته تنفجر عند 100%.",
+    "fire force": "شينرا كوساكابي جندي من فيلق النار الخاص بمحاربة حرائق الانفجار البشري، يسعى لأن يصبح بطلًا ويكشف أسرار اشتعال والدته.",
+    "black clover": "في عالم السحر، يستعد فتى بلا سحر اسمه أستا لحمل كتاب الشمار الثلاثة الورقي ليصبح Emperor السحر ملك الساحر.",
+    "dr. stone": "بعد تحجر البشرية كلها لآلاف السنين، يستيقظ عبقري العلوم سينكو عازمًا على إعادة بناء الحضارة من الصفر بالعلم.",
+    "haikyu": "هيناتا شويو طالب قصير القامة يحلم بأن يصبح نجم الكرة الطائرة التالي رغم طول، فينضم لنادى المدرسة ليقابل منافسه اللدود كاغياما."
+  };
+  const DESCRIPTIONS_AR_KEYS = Object.keys(DESCRIPTIONS_AR).map(k => k.replace(/[^a-z0-9]/g, ""));
+  function isArabicText(s) { return /[\u0600-\u06FF]/.test(String(s || "")); }
+  function normalizeDescKey(s) { return String(s || "").toLowerCase().replace(/[^a-z0-9]/g, ""); }
+  function localizeStatus(status) {
+    const s = String(status || "").toLowerCase();
+    if (!s) return status || "";
+    if (s.includes("airing") || s.includes("ongoing")) return t("details.status_ongoing");
+    if (s.includes("complete") || s.includes("finished")) return t("details.status_completed");
+    if (currentLang !== "ar") return status;
+    if (s.includes("not yet") || s.includes("upcoming")) return "لم يُعرض بعد";
+    if (s.includes("cancel")) return "ملغي";
+    if (s.includes("hiatus")) return "متوقف مؤقتًا";
+    return status;
+  }
+  function localizeDescription(text, animeObj) {
+    if (!text) return "";
+    // 1) Backend-supplied Arabic description wins when present.
+    const apiAr = animeObj && (animeObj.description_arabic || animeObj.description_ar || animeObj.synopsis_ar);
+    if (apiAr && isArabicText(apiAr)) return apiAr;
+    // English mode always shows the original text.
+    if (currentLang !== "ar") return text;
+    if (isArabicText(text)) return text;
+    // 2) Curated offline translations for well-known titles.
+    const candidates = [];
+    if (animeObj) {
+      if (animeObj.title) candidates.push(animeObj.title);
+      if (animeObj.romaji) candidates.push(animeObj.romaji);
+      if (animeObj.name) candidates.push(animeObj.name);
+    }
+    for (const c of candidates) {
+      const nk = normalizeDescKey(c);
+      if (!nk) continue;
+      const hit = DESCRIPTIONS_AR_KEYS.indexOf(nk);
+      if (hit !== -1) return DESCRIPTIONS_AR[Object.keys(DESCRIPTIONS_AR)[hit]];
+    }
+    // 3) Fallback: original English text (CSS unicode-bidi keeps it readable).
+    return text;
+  }
 
   let currentLang = "en";
   try { currentLang = localStorage.getItem("aninova-lang") || "en"; } catch(e) {}
@@ -2674,6 +2831,34 @@
     currentLang = lang;
     try { localStorage.setItem("aninova-lang", lang); } catch(e) {}
     applyTranslations();
+    refreshDynamicContent();
+  }
+
+  // Re-render every language-dependent surface so switching EN <-> AR leaves no
+  // stale Arabic/English fragments (titles, descriptions, badges, day names).
+  function refreshDynamicContent() {
+    // force hover-cards to re-localize on next mouseenter
+    for (const k of Object.keys(metaCache)) delete metaCache[k];
+    document.querySelectorAll(".hover-card[data-loaded]").forEach(el => { delete el.dataset.loaded; el.innerHTML = ""; });
+    try { if (featuredItems.length) renderFeatured(); } catch (e) {}
+    try {
+      buildScheduleBar();
+      renderSchedule();
+    } catch (e) {}
+    try { loadTrending(); } catch (e) {}
+    try { loadTop10(); } catch (e) {}
+    try { loadContinue(); } catch (e) {}
+    try { loadMyList(); } catch (e) {}
+    const sv = document.getElementById("search-results-view");
+    if (sv && sv.classList.contains("active") && lastGridResults.length) {
+      try { renderGrid(lastGridResults); } catch (e) {}
+    }
+    const dv = document.getElementById("details-view");
+    if (dv && dv.classList.contains("active") && details) {
+      try { renderHero(); } catch (e) {}
+      try { syncDetailsBookmark(); } catch (e) {}
+      try { renderEpisodeList(); selectEpisode(selectedEp, false); } catch (e) {}
+    }
   }
 
   function toggleLanguage() {
@@ -3075,9 +3260,9 @@
 
   function populateHoverMeta(metaEl, m) {
     const rating = m.score != null ? `<span class="hc-rating">★ ${esc(m.score)}</span>` : "";
-    const status = m.status ? `<span class="hc-status">${esc(m.status)}</span>` : "";
+    const status = m.status ? `<span class="hc-status">${esc(localizeStatus(m.status))}</span>` : "";
     const syn = m.description
-      ? `<div class="hc-synopsis">${esc(m.description)}</div>`
+      ? `<div class="hc-synopsis">${esc(localizeDescription(m.description, m))}</div>`
       : `<div class="hc-empty">${t("details.no_synopsis")}</div>`;
     metaEl.innerHTML = `${rating || status ? `<div class="hc-row">${rating}${status}</div>` : ""}${syn}`;
     metaEl.dataset.loaded = "1";
@@ -3232,7 +3417,7 @@
     if (!q) { closeSearchDrop(); return; }
     lastDropQuery = q.toLowerCase();
     searchDropEmpty.style.display = "none";
-    searchDropList.innerHTML = '<div class="search-drop-empty">Searching…</div>';
+    searchDropList.innerHTML = `<div class="search-drop-empty">${t("search.searching")}</div>`;
     searchDrop.classList.add("show");
     searchDropOpen = true;
     searchDropOwner = anchor;
@@ -3278,7 +3463,9 @@
     if (Array.isArray(d.results)) renderSearchDrop(d.results);
   });
 
+  let lastGridResults = [];
   function renderGrid(results) {
+    lastGridResults = Array.isArray(results) ? results : [];
     if (!results || !results.length) {
       grid.innerHTML = `<div class="empty">${t("search.no_results")}</div>`;
       return;
@@ -3332,7 +3519,7 @@
         <div class="f-content">
           <div class="f-tag">${tagText}</div>
           <h2 class="f-title">${esc(displayTitle)}</h2>
-          ${r.description ? `<p class="f-desc">${esc(r.description)}</p>` : ""}
+          ${r.description ? `<p class="f-desc">${esc(localizeDescription(r.description, r))}</p>` : ""}
           <div class="f-actions">
             <button class="primary f-play">${watchFreeText}</button>
           </div>
@@ -3373,7 +3560,7 @@
   function buildScheduleBar() {
     const now = new Date();
     const todayIdx = now.getDay();
-    activeDay = DAY_ORDER[todayIdx].toLowerCase();
+    if (!activeDay) activeDay = DAY_ORDER[todayIdx].toLowerCase();
     $("#scheduleBar").innerHTML = DAY_ORDER.map((name, i) => {
       const d = new Date(now);
       d.setDate(now.getDate() - todayIdx + i);
@@ -3410,7 +3597,8 @@
   function renderSchedule() {
     const items = activeDay ? scheduleData.filter(x => x.day === activeDay) : scheduleData;
     const dayName = DAY_ORDER.find(n => n.toLowerCase() === activeDay);
-    $("#scheduleTitle").textContent = dayName ? t("schedule.upcoming_day", {day: dayName}) : t("schedule.upcoming");
+    const localizedDay = dayName ? t("days." + dayName.toLowerCase()) : "";
+    $("#scheduleTitle").textContent = dayName ? t("schedule.upcoming_day", {day: localizedDay}) : t("schedule.upcoming");
     const strip = $("#scheduleStrip");
     strip.innerHTML = "";
     if (!items.length) {
@@ -3427,17 +3615,19 @@
       ? `<img class="poster" src="${r.poster}" alt="" referrerpolicy="no-referrer" onerror="this.outerHTML='<div class=poster.ph>◆</div>'" />`
       : '<div class="poster ph">◆</div>';
     const displayTitle = localizeAnimeTitle(r.title);
+    const dayKey = r.day ? "days." + String(r.day).toLowerCase() : null;
+    const dayText = (dayKey && I18N[currentLang] && t(dayKey) !== dayKey) ? t(dayKey) : cap(r.day);
     card.innerHTML = `
       <div class="poster-wrap">
         ${poster}
-        <span class="badge eps">EP ${esc(String(r.episode || "?"))}</span>
+        <span class="badge eps">${t("episode.ep_short", {n: esc(String(r.episode || "?"))})}</span>
         <span class="badge air">${esc(fmtAir(r))}</span>
         ${bookmarkButtonFor(r)}
         <div class="hover-card"></div>
       </div>
       <div class="meta">
         <div class="title">${esc(displayTitle)}</div>
-        <div class="provider">${esc(cap(r.day))}</div>
+        <div class="provider">${esc(dayText)}</div>
       </div>`;
     attachHoverMeta(card, r);
     bindCardBookmark(card, r);
@@ -3698,7 +3888,9 @@
     const title = details.title || current.title;
     const displayTitle = localizeAnimeTitle(title, details);
     $("#detTitle").textContent = displayTitle;
-    $("#crumbs").textContent = `${details.type || ""} · ${details.premiered || ""}`
+    const typeKey = details.type ? "badge." + String(details.type).toLowerCase() : null;
+    const typeText = (typeKey && t(typeKey) !== typeKey) ? t(typeKey) : (details.type || "");
+    $("#crumbs").textContent = `${typeText} · ${details.premiered || ""}`
       .replace(/^\s*·\s*/, "").replace(/\s*·\s*$/, "").replace(/\s*·\s*/g, " · ") || displayTitle;
 
     const altParts = [];
@@ -3722,10 +3914,9 @@
     pills.push([epsText, ""]);
     
     if (details.status) {
-      let statusText = details.status;
-      if (details.status.toLowerCase() === "airing") statusText = t("details.status_ongoing");
-      else if (details.status.toLowerCase() === "completed") statusText = t("details.status_completed");
-      const cls = details.status === "Airing" ? "style='background:rgba(47,208,123,.15);border-color:rgba(47,208,123,.5);color:#7ce8b3'" : "";
+      const isAiring = details.status.toLowerCase().includes("airing");
+      const statusText = localizeStatus(details.status);
+      const cls = isAiring ? "style='background:rgba(47,208,123,.15);border-color:rgba(47,208,123,.5);color:#7ce8b3'" : "";
       pills.push([statusText, cls]);
     }
     if (Array.isArray(details.studio)) {
@@ -3739,7 +3930,7 @@
     $("#detGenres").innerHTML = (Array.isArray(details.genres) ? details.genres : [])
       .map(g => `<span class="pill">${esc(localizeGenre(g))}</span>`).join("");
 
-    const syn = details.description || t("details.no_synopsis");
+    const syn = localizeDescription(details.description, details) || t("details.no_synopsis");
     $("#detSynopsis").textContent = syn;
     $("#synToggle").textContent = t("details.show_more");
     $("#synToggle").style.display = syn.length > 230 ? "inline-block" : "none";
@@ -3868,7 +4059,7 @@
     if (!ep) return;
     selectedEp = ep;
     $("#epDetailTitle").textContent = t("episode.label", {n: fmtEp(ep.episode_num)});
-    $("#epDetailSub").textContent = `${cap(provider || ep.provider || "")} · ${catLabel(category)} · ${cap(current.title)}`;
+    $("#epDetailSub").textContent = `${cap(provider || ep.provider || "")} · ${catLabel(category)} · ${cap(localizeAnimeTitle(current.title, current))}`;
     const rows = document.querySelectorAll(".ep-row");
     rows.forEach(r => r.classList.toggle("active", Number(r.dataset.ep) === ep.episode_num));
     if (scroll) {
