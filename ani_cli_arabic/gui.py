@@ -1555,6 +1555,37 @@ class JSApi:
     # ------------------------------------------------------------------
     # playback
     # ------------------------------------------------------------------
+    def _prefetch_next_episode(self, anime_id: str, ep_num,
+                               provider: Optional[str], category: str,
+                               resolution: str):
+        """Resolve episode N+1 in the background into the stream cache.
+
+        Called from a daemon thread right after episode N starts playing, so
+        clicking "Next" launches instantly from cache instead of re-running the
+        provider chain. Best-effort: every failure is silent and nothing is
+        cached for a missing episode. Deduplicated via the cache's in-flight
+        registry so rapid next/prev double-clicks never pile up resolutions."""
+        try:
+            ep_num_f = float(ep_num)
+        except (TypeError, ValueError):
+            return
+        # Only whole episodes; fractional specials (.5) rarely have N+1.
+        if ep_num_f < 1 or ep_num_f != int(ep_num_f):
+            return
+        nxt = int(ep_num_f) + 1
+        from .stream_cache import StreamCache, make_key
+        key = make_key(
+            self._anime_title(anime_id) or anime_id, nxt, category, resolution,
+        )
+        if not StreamCache.instance().begin(key):
+            return
+        try:
+            self._resolve_stream(anime_id, nxt, provider, category, resolution)
+        except Exception:
+            pass
+        finally:
+            StreamCache.instance().end(key)
+
     def play_episode(
         self,
         anime_id: str,
@@ -1759,6 +1790,20 @@ class JSApi:
             monitor.set_activity("watching", title, ep_num)
         except Exception:
             pass
+
+        # Background prefetch: resolve episode N+1 into the stream cache while
+        # N plays, so "Next episode" starts instantly. Guests skip (the host
+        # controls the room); every failure is silent by design.
+        if not (guest is not None and getattr(guest, "is_active", False)):
+            try:
+                threading.Thread(
+                    target=self._prefetch_next_episode,
+                    args=(anime_id, ep_num, provider, category, resolution),
+                    daemon=True,
+                    name="prefetch-next-ep",
+                ).start()
+            except Exception:
+                pass
 
         try:
             self._player_mgr().play_with_quality_fallback(
@@ -2102,6 +2147,47 @@ class JSApi:
         return meta.get("title") or meta.get("romaji") or "Anime"
 
     def _resolve_stream(
+        self,
+        anime_id: str,
+        ep_num,
+        provider: Optional[str],
+        category: str = "sub",
+        resolution: str = "auto",
+    ):
+        """TTL-cache-fronted wrapper around :meth:`_resolve_stream_impl`.
+
+        Successful resolutions are cached for ~90 min (HLS tokens outlive a
+        session), so re-clicking an episode, playing the prefetched next
+        episode, or a Watch Together guest joining late skips the provider
+        chain entirely."""
+        from .stream_cache import StreamCache, make_key
+
+        key = make_key(
+            self._anime_title(anime_id) or anime_id,
+            ep_num, category, resolution,
+        )
+        try:
+            hit = StreamCache.instance().get(key)
+        except Exception:
+            hit = None
+        if hit and self._is_usable_stream(hit):
+            return dict(hit, cached=True)
+
+        result = self._resolve_stream_impl(
+            anime_id, ep_num, provider, category, resolution
+        )
+        if self._is_usable_stream(result):
+            try:
+                StreamCache.instance().put(
+                    key, result.get("stream_url") or "",
+                    result.get("headers") or {},
+                    result.get("provider") or "",
+                )
+            except Exception:
+                pass
+        return result
+
+    def _resolve_stream_impl(
         self,
         anime_id: str,
         ep_num,

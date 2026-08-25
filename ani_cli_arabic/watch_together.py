@@ -66,6 +66,15 @@ SYNC_MAX_CATCHUP = 0.35       # max speed bump above 1.0x for slow catch-up
 SYNC_AHEAD_SPEED = 0.95       # speed when the guest is ahead (let host catch up)
 SYNC_EWMA_ALPHA = 0.3         # EWMA smoothing factor for drift (0 < a <= 1)
 SYNC_MIN_SPEED_INTERVAL = 1.0 # min seconds between consecutive speed changes
+# --- Mini-NTP clock-offset estimation ---
+# Guests compare host heartbeat timestamps to their own wall clock. Raw
+# differences mix the true clock offset with network transit; transit varies
+# while the offset is near-constant, so a windowed MINIMUM isolates the offset
+# far better than a median would (median absorbs typical transit as bias).
+_CLOCK_WINDOW = 12            # heartbeats kept for the min-filter
+_CLOCK_MIN_SAMPLES = 3        # samples before the estimate is trusted
+_HOST_URL_PROBE_TIMEOUT = 0.75
+_STREAM_CACHE_TTL = 90 * 60
 
 SENDER_HOST = "host"
 ROLE_HOST = "host"
@@ -770,6 +779,120 @@ def _loadfile_command(url: str, headers: Optional[Dict[str, str]]) -> list:
     return cmd
 
 
+# ---------------------------------------------------------------------------
+# Host-URL reachability probe + clock math (pure helpers, unit-testable)
+# ---------------------------------------------------------------------------
+def _interpret_probe_status(status) -> Optional[bool]:
+    """Classify an HTTP status for the host-URL probe.
+
+    True  -> URL usable (2xx/3xx, or transient 5xx where letting mpv retry
+             beats discarding a provider URL that likely still works).
+    False -> hard block (401/403 geo-or-token rejection, 404/410 gone):
+             fall back to local resolution immediately.
+    None  -> inconclusive (4xx method issues after HEAD fallback etc.):
+             treat as usable rather than paying a full re-resolution.
+    """
+    try:
+        code = int(status)
+    except (TypeError, ValueError):
+        return None
+    if code < 400:
+        return True
+    if code in (401, 403, 404, 410):
+        return False
+    if 500 <= code < 600:
+        return True
+    return None
+
+
+def _probe_stream_url(url: str, headers: Optional[Dict[str, str]] = None,
+                      timeout: float = _HOST_URL_PROBE_TIMEOUT,
+                      _transport=None) -> Optional[bool]:
+    """Fast reachability check for a host-relayed stream URL.
+
+    CDN tokens are frequently bound to the host's IP/geo, so remote guests can
+    receive a URL that 403s for them while it works for the host. A sub-second
+    probe catches that before launching mpv into a black screen; on a hard
+    block the guest falls back to its own provider chain.
+
+    Returns True (usable / inconclusive-but-benign), False (hard block),
+    or None when this environment has no httpx available. Timeouts are
+    deliberately treated as *usable*: slow guests must not pay a multi-second
+    re-resolution penalty for a link that buffering would have handled.
+    ``_transport`` exists solely for tests (httpx.MockTransport).
+    """
+    if not url or not str(url).startswith(("http://", "https://")):
+        return None
+    try:
+        import httpx
+    except ImportError:
+        return None
+    hdrs = {}
+    if headers:
+        ref = headers.get("Referer")
+        if ref:
+            hdrs["Referer"] = str(ref)
+        ua = headers.get("User-Agent")
+        if ua:
+            hdrs["User-Agent"] = str(ua)
+    try:
+        kwargs = {"timeout": timeout, "follow_redirects": True}
+        if _transport is not None:
+            kwargs["transport"] = _transport
+        with httpx.Client(**kwargs) as client:
+            try:
+                r = client.head(url, headers=hdrs)
+                verdict = _interpret_probe_status(r.status_code)
+                if verdict is not None:
+                    return verdict
+                # Some CDNs reject HEAD outright: one tiny ranged GET before
+                # giving up on the probe.
+                r = client.get(url, headers={**hdrs, "Range": "bytes=0-1"})
+                verdict = _interpret_probe_status(r.status_code)
+                return True if verdict is None else verdict
+            except httpx.TimeoutException:
+                return True   # inconclusive: prefer buffering over re-resolve
+            except httpx.HTTPError:
+                # Connection refused/reset with the host's CDN: another route
+                # may work, so a local resolution attempt is worthwhile.
+                return False
+    except Exception:
+        return None
+
+
+def _clock_offset_from_samples(samples) -> Optional[float]:
+    """Windowed-minimum offset estimate from ``(recv - sent)`` samples.
+
+    Each sample equals ``true_offset + transit``; the minimum over a window
+    tracks ``true_offset + best_transit``, which on any real link sits within
+    a few tens of ms of the truth — versus a median that absorbs typical
+    transit (~100-300ms cross-region) as permanent bias.
+    Returns None until at least ``_CLOCK_MIN_SAMPLES`` exist.
+    """
+    vals = [s for s in samples if isinstance(s, (int, float)) and s == s]
+    if len(vals) < _CLOCK_MIN_SAMPLES:
+        return None
+    return min(vals)
+
+
+def _target_media_time(host_time, sent, now, playing, offset) -> float:
+    """Guest-side estimate of where the HOST player is right now.
+
+    With an offset estimate: host wall clock seen from the guest is
+    ``now - offset``; media advanced by exactly that much since the heartbeat
+    left the host (only while playing). Without one, falls back to the legacy
+    half-RTT heuristic so pre-warmup heartbeats behave as before.
+    """
+    host_time = float(host_time or 0.0)
+    if playing and isinstance(sent, (int, float)) and sent > 0:
+        if offset is not None:
+            elapsed = max(0.0, (now - offset) - float(sent))
+            return host_time + elapsed
+        latency = max(0.0, now - float(sent)) / 2.0
+        return host_time + latency
+    return host_time
+
+
 class WatchHost:
     def __init__(self, player_kind: str = "mpv"):
         self.code = "".join(str(random.randint(0, 9)) for _ in range(ROOM_CODE_LEN))
@@ -1279,6 +1402,9 @@ class WatchGuest:
         self._last_epoch = -1
         self._host_cmd: Dict[str, Any] = {}
         self._last_enforce_ts = 0.0
+        # --- Mini-NTP clock-offset state ---
+        self._clock_samples: list = []      # raw (recv - sent) window
+        self._clock_offset: Optional[float] = None
         atexit.register(self._atexit_cleanup)
 
     @property
@@ -1509,6 +1635,27 @@ class WatchGuest:
                 break
 
     def _resolve_stream(self, payload: dict) -> Tuple[str, Dict, str]:
+        """Resolve with a TTL stream-cache fronting the provider chain.
+
+        Room members rejoin/switch constantly; a cached resolution makes those
+        instant and stops N guests from hammering providers for the identical
+        (title, episode, track)."""
+        from .stream_cache import StreamCache, make_key
+        title = str(payload.get("title", "") or "")
+        episode = payload.get("episode", "1")
+        language = str(payload.get("language", "English Sub") or "English Sub")
+        key = make_key(title, episode, language, "")
+        hit = StreamCache.instance().get(key)
+        if hit and hit.get("stream_url"):
+            return hit["stream_url"], hit.get("headers") or {}, \
+                hit.get("provider") or "cache"
+        url, headers, provider = self._resolve_stream_uncached(payload)
+        if url:
+            StreamCache.instance().put(key, url, headers, provider,
+                                  ttl=_STREAM_CACHE_TTL)
+        return url, headers, provider
+
+    def _resolve_stream_uncached(self, payload: dict) -> Tuple[str, Dict, str]:
         title = payload.get("title", "")
         episode = payload.get("episode", "1")
         language = payload.get("language", "English Sub")
@@ -1517,6 +1664,27 @@ class WatchGuest:
         if language == "Arabic Sub":
             return self._resolve_arabic(title, episode)
         return self._resolve_english(title, episode, mode)
+
+    def _host_url_or_none(self, url: str, headers: Optional[Dict[str, str]]) -> Optional[str]:
+        """Return ``url`` when the host-relayed link is reachable from here.
+
+        CDN tokens are commonly bound to the host's IP/geo; a sub-second probe
+        catches hard 403/404 blocks so this guest can fall back to its own
+        provider chain instead of launching mpv into a black screen. Inconclusive
+        probes keep the URL — buffering beats a multi-second re-resolution."""
+        if not url:
+            return None
+        verdict = _probe_stream_url(url, headers)
+        if verdict is False:
+            try:
+                from .monitoring import monitor
+                monitor.track_sync_error("guest", drift_seconds=0.0,
+                                         corrected=False)
+            except Exception:
+                pass
+            self._osd("Host stream unavailable here - resolving locally")
+            return None
+        return url
 
     @staticmethod
     def _has_active_media(payload: dict) -> bool:
@@ -1608,6 +1776,8 @@ class WatchGuest:
             url = str(payload.get("url") or "")
             headers = dict(payload.get("headers") or {})
             if url:
+                url = self._host_url_or_none(url, headers) or ""
+            if url:
                 if epoch < self._last_epoch:
                     return
                 self._launch_player(url, headers)
@@ -1670,9 +1840,12 @@ class WatchGuest:
         url = str(payload.get("url") or "")
         headers = dict(payload.get("headers") or {})
         if url:
-            self._launch_player(url, headers)
-            self._pending = {}
-            return
+            probed = self._host_url_or_none(url, headers)
+            if probed:
+                self._launch_player(probed, headers)
+                self._pending = {}
+                return
+            # Blocked here: fall through to local resolution below.
         def worker():
             try:
                 resolved_url, resolved_headers, provider = self._resolve_stream(payload)
@@ -1850,19 +2023,18 @@ class WatchGuest:
         if guest_time is None:
             return
 
-        # --- 1) Latency & RTT compensation ---
+        # --- 1) Clock-offset estimation (mini-NTP min-filter) ---
         now = time.time()
-        rtt = 0.0
         sent = payload.get("sent")
         if isinstance(sent, (int, float)) and sent > 0:
-            rtt = max(0.0, now - sent)
-        latency = rtt / 2.0
-        elapsed_arrival = (
-            now - self._last_heartbeat_recv
-            if self._last_heartbeat_recv > 0 else 0.0
+            self._clock_samples.append(now - float(sent))
+            if len(self._clock_samples) > _CLOCK_WINDOW:
+                self._clock_samples.pop(0)
+            self._clock_offset = _clock_offset_from_samples(self._clock_samples)
+
+        target_time = _target_media_time(
+            host_time, sent, now, bool(playing is not False), self._clock_offset
         )
-        self._last_heartbeat_recv = now
-        target_time = float(host_time) + latency + elapsed_arrival
 
         # --- 4) EWMA-smooth the drift so network spikes don't trigger seeks ---
         raw_drift = target_time - guest_time
