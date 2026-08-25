@@ -14,6 +14,7 @@ import re as _re
 import sys
 import threading
 import time
+import traceback
 import urllib.request
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor, as_completed, wait
@@ -195,7 +196,7 @@ _BROWSE_GRAPHQL = """\
 query ($page: Int, $perPage: Int, $genre: [String], $sort: [MediaSort], $season: MediaSeason, $seasonYear: Int) {
   Page(page: $page, perPage: $perPage) {
     pageInfo { total currentPage lastPage hasNextPage }
-    media(type: ANIME, genre_in: $genre, sort: $sort, season: $season, season_year: $seasonYear, isAdult: false) {
+    media(type: ANIME, genre_in: $genre, sort: $sort, season: $season, seasonYear: $seasonYear, isAdult: false) {
       id
       title { romaji english }
       coverImage { large }
@@ -260,13 +261,19 @@ _SEASON_BY_MONTH = {
 }
 _SEASON_CYCLE = ["WINTER", "SPRING", "SUMMER", "FALL"]
 
+# AniList's MediaSort enum uses BRITISH spelling: FAVOURITES_DESC.
+# The American spelling returns HTTP 400 "invalid value".
 _BROWSE_SORTS = (
-    "TRENDING_DESC", "POPULARITY_DESC", "SCORE_DESC", "FAVORITES_DESC",
+    "TRENDING_DESC", "POPULARITY_DESC", "SCORE_DESC", "FAVOURITES_DESC",
 )
+# Legacy alias accepted from older callers/UI values.
+_SORT_ALIASES = {"FAVORITES_DESC": "FAVOURITES_DESC"}
 _BROWSE_PER_PAGE = 30
 _BROWSE_CACHE_MAX = 240
 _BROWSE_CACHE: Dict[tuple, Dict[str, Any]] = {}
 _BROWSE_CACHE_LOCK = threading.Lock()
+# Test kill-switch: when False, _anilist_post raises instead of using urllib.
+_ANILIST_URIBLIB_FALLBACK = True
 
 
 def _current_season(today=None) -> tuple:
@@ -287,6 +294,50 @@ def _browse_cache_key(genre, sort, season, page, per_page) -> tuple:
             str(season or "").lower(), int(page), int(per_page))
 
 
+def _anilist_post(query: str, variables: Dict[str, Any]) -> tuple:
+    """POST a GraphQL payload to AniList with transport resilience.
+
+    Primary: httpx (HTTP/2-capable, fast). Fallback: stdlib urllib.request
+    over HTTP/1.1 with identical desktop-Chrome headers — Cloudflare TLS
+    fingerprinting occasionally rejects exotic httpx stacks, and the plain
+    stdlib client has a different fingerprint that passes.
+
+    Returns ``(status_code:int, text:str)``. Raises only when BOTH transports
+    fail at the network level; HTTP error statuses are returned for the caller
+    to classify."""
+    body = json.dumps({"query": query, "variables": variables}).encode("utf-8")
+    import httpx
+    try:
+        r = httpx.post(
+            _ANILIST_GRAPHQL,
+            content=body,
+            headers=_ANILIST_HTTP_HEADERS,
+            timeout=12.0,
+        )
+        return r.status_code, r.text
+    except Exception as exc:
+        # Tests disable this fallback so mocked transports stay hermetic.
+        if not _ANILIST_URIBLIB_FALLBACK:
+            raise
+        print(f"[anilist] httpx transport failed ({type(exc).__name__}: {exc}) "
+              f"-> falling back to urllib", file=sys.stderr)
+    req = urllib.request.Request(
+        _ANILIST_GRAPHQL,
+        data=body,
+        headers={k: v for k, v in _ANILIST_HTTP_HEADERS.items()},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=12.0) as resp:
+            return resp.status, resp.read().decode("utf-8", "replace")
+    except urllib.error.HTTPError as he:
+        try:
+            err_body = he.read().decode("utf-8", "replace")[:400]
+        except Exception:
+            err_body = ""
+        return he.code, err_body
+
+
 def _anilist_browse(genre: str, sort: str, season: str,
                     page: int, per_page: int = _BROWSE_PER_PAGE) -> Dict[str, Any]:
     """Fetch one page of category results from AniList.
@@ -297,11 +348,14 @@ def _anilist_browse(genre: str, sort: str, season: str,
     frontend card renderer can consume them directly. Raises on network/HTTP
     failure so callers can distinguish errors from empty results.
     """
+    sort_clean = _SORT_ALIASES.get(str(sort or "").upper(), str(sort or "").upper())
+    if sort_clean not in _BROWSE_SORTS:
+        sort_clean = "TRENDING_DESC"
     variables: Dict[str, Any] = {
         "page": max(1, int(page)),
         "perPage": max(1, min(50, int(per_page))),
-        # sort MUST be a list of valid MediaSort enums
-        "sort": [sort if sort in _BROWSE_SORTS else "TRENDING_DESC"],
+        # sort MUST be a list of valid MediaSort enums (British FAVOURITES!)
+        "sort": [sort_clean],
     }
     # Sanitization contract: absent filter keys are the ONLY way to express
     # "no filter". Never send null/empty-string/placeholder values — AniList
@@ -329,14 +383,9 @@ def _anilist_browse(genre: str, sort: str, season: str,
     payload = None
     for attempt in range(2):  # 1 automatic retry on HTTP/network failure
         try:
-            r = httpx.post(
-                _ANILIST_GRAPHQL,
-                json={"query": _BROWSE_GRAPHQL, "variables": variables},
-                timeout=12.0,
-                headers=_ANILIST_HTTP_HEADERS,
-            )
-            if r.status_code == 200:
-                body = r.json()
+            status, text = _anilist_post(_BROWSE_GRAPHQL, variables)
+            if status == 200:
+                body = json.loads(text)
                 gql_errors = body.get("errors")
                 if gql_errors:
                     # HTTP 200 but GraphQL-level failure (validation etc.) —
@@ -349,11 +398,11 @@ def _anilist_browse(genre: str, sort: str, season: str,
             # Body head computed defensively: a broken .text must never
             # reclassify an HTTP failure as a network one.
             try:
-                body_head = str(r.text)[:400]
+                body_head = str(text)[:400]
             except Exception:
                 body_head = "<unreadable>"
-            _log_graphql_failure(r.status_code, body_head, "http-error")
-            last_err = RuntimeError(f"AniList HTTP {r.status_code}")
+            _log_graphql_failure(status, body_head, "http-error")
+            last_err = RuntimeError(f"AniList HTTP {status}")
         except RuntimeError:
             raise  # GraphQL-errors already logged; retrying validation is pointless
         except Exception as exc:
@@ -2205,6 +2254,12 @@ class JSApi:
                                             int(page or 1), int(per_page))
             return {"ok": True, **result}
         except Exception as exc:
+            # Full diagnostics to stdout: raw exception type + complete stack
+            # trace, so category failures are debuggable from logs alone.
+            print(f"[browse] FAILED genre={genre!r} sort={sort!r} "
+                  f"season={season!r} page={page} :: "
+                  f"{type(exc).__name__}: {exc}", file=sys.stderr)
+            traceback.print_exc()
             try:
                 from .monitoring import monitor
                 monitor.track_error("Browse category failed",
@@ -2213,7 +2268,8 @@ class JSApi:
                                     exception=exc)
             except Exception:
                 pass
-            return {"ok": False, "error": f"{type(exc).__name__}: {exc}",
+            return {"ok": False,
+                    "error": f"{type(exc).__name__}: {exc}",
                     "items": [], "has_next": False, "page": int(page or 1)}
 
     def translate_synopsis(self, title: str, text: str) -> Dict:
