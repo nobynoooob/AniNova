@@ -1596,14 +1596,18 @@
         <div class="home-main">
           <div class="section-title" id="trendingTitle">Trending Now</div>
           <div class="strip" id="trendingStrip"></div>
-          <div class="section-title" id="resultsTitle" style="display:none">Results</div>
-          <div class="grid" id="grid"></div>
         </div>
         <aside class="top10-sidebar">
           <div class="section-title">Top Trending</div>
           <div class="top10-list" id="top10List"></div>
         </aside>
       </div>
+    </section>
+
+    <!-- ================= SEARCH RESULTS VIEW ================= -->
+    <section class="view" id="search-results-view">
+      <div class="section-title" id="resultsTitle">Search Results</div>
+      <div class="grid" id="grid"></div>
     </section>
 
     <!-- ================= DETAILS / PLAYER VIEW ================= -->
@@ -2377,6 +2381,13 @@
   $("#btnNotif").addEventListener("click", () => toast("No new notifications."));
   $("#btnProfile").addEventListener("click", () => toast("Signed in as Local User"));
 
+  // "Back to Search" returns to the search-results-view (or home if none).
+  $("#btnBack").addEventListener("click", () => {
+    detailsToken++;
+    current = null; details = null; selectedEp = null;
+    showView(lastQuery ? "search-results-view" : "home-view");
+  });
+
   // ---------- home: trending ----------
   async function loadTrending() {
     try {
@@ -2459,21 +2470,15 @@
     return card;
   }
 
-  // ---------- home: search ----------
+  // ---------- search ----------
   let lastQuery = null;
   async function doSearch(query) {
     const q = (query != null ? query : $("#q").value).trim();
     if (!q) return;
-    // Searching from the details view always returns to Home first so the
-    // results grid (which lives in the home view) is visible.
-    if (document.getElementById("details-view").classList.contains("active")) {
-      detailsToken++;
-      showView("home-view");
-      current = null; details = null; selectedEp = null;
-    }
+    // Switch to the dedicated search-results view so trending / sidebar are hidden.
+    showView("search-results-view");
     lastQuery = q.toLowerCase();
     grid.innerHTML = '<div class="spinner"></div>';
-    $("#resultsTitle").style.display = "block";
     try {
       const api = await getApi();
       if (!api) { toast("PyWebView bridge not available", true); return; }
@@ -3243,7 +3248,7 @@ attachHoverMeta(card, r);
   });
 
   // ---------- back ----------
-  $("#btnBack").addEventListener("click", goHome);
+  // (btnBack listener is defined in top-navigation section above)
 
   // ---------- synopsis toggle ----------
   $("#synToggle").addEventListener("click", () => {
