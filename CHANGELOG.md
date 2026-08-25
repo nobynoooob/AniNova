@@ -10,6 +10,57 @@ Format follows [Keep a Changelog](https://keepachangelog.com/) conventions. This
 
 ---
 
+## [v1.9.0] - 2026-08-25
+
+### 🚀 Performance & Sync Engineering — Three-Phase Optimization (on top of the v1.8.0 UI overhaul)
+
+#### Phase 3 — Anchor-Based Watch Together Protocol v3 (sub-50ms sync)
+- **ANCHOR broadcast** `{pos, t0, playing, epoch}` published on every discrete
+  host transition (load/play/pause/seek/hotkey/auto-skip); guests extrapolate
+  target time locally every 500ms so drift between anchors reflects only
+  playback-rate mismatch (~zero) — precision no longer depends on snapshot
+  cadence.
+- Heartbeats continue as self-heal snapshots + clock-offset sample sources;
+  pre-v3 peers ignore ANCHOR frames safely.
+- **Episode-load countdown** (0-10s, default 3): active rooms launch paused,
+  buffer through the window, then a room-wide GO anchor starts everyone at the
+  same instant (`mpv --pause` / VLC `--start-paused` threaded end-to-end).
+- **Strict sync safeguard** (opt-in, default OFF): host pauses the room when
+  any member buffers >=5s continuously; stays paused until the host resumes.
+- **Version guardrails**: JOIN carries `proto`; mismatched generations get a
+  once-per-30s OSD notice instead of silent degradation.
+
+#### Phase 2 — Sync & Resolution Intelligence
+- **Mini-NTP clock offset**: windowed-minimum filter over heartbeat timestamps
+  isolates wall-clock skew from network transit; target-time math fixed a
+  legacy per-beat double-count.
+- **Host-URL probe**: sub-second HEAD (+ranged-GET fallback) detects IP/geo-bound
+  token blocks before mpv hits a black screen; hard blocks fall back to local
+  resolution immediately; timeouts treated benign to protect slow guests.
+- **Stream cache**: TTL-backed (90min), LRU-capped, thread-safe, with in-flight
+  dedupe wired into both GUI and Watch Together pipelines.
+- **N+1 prefetch**: next episode resolves in the background during playback;
+  "Next" launches instantly from cache.
+
+#### Phase 1 — Precision, Provider Speed, Buffering
+- Watch Together cadence: heartbeat 3.0s -> 1.0s, poll loop 0.5s -> 0.25s;
+  catch-up gain fixed and raised (1s of drift now converges at ~1.15x speed).
+- All mpv/VLC control commands serialized through FIFO worker executors —
+  commands reach players strictly in broadcast order; thread storms gone.
+- VLC guests gain sub-second position precision (`get_position` x length),
+  removing the +/-1s integer quantization floor.
+- miruro.tv runs on a persistent warm browser page: only the first pipe call
+  pays Cloudflare warmup (~5s), later calls go straight to evaluate().
+- Per-provider timeouts split: 12s for HTTP-only scrapers vs 30s for
+  browser-backed ones — one dead host no longer stalls the chain.
+- mpv buffers 120s ahead (`--cache-secs=120`, readahead 120s).
+
+#### Hygiene
+- `debug_streams.log` size-rotation (1MB -> .old), unbounded growth fixed.
+- CI actions bumped past Node-20 deprecations.
+
+---
+
 ## [v1.8.0] - 2026-08-25
 
 ### ✨ Complete UI Overhaul, Glassmorphism Aesthetic, and Deep Bilingual Arabic/English Localization
