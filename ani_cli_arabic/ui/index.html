@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>AniNova AR</title>
 <style>
+  @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+
   :root {
     --bg: #121212;
     --bg-2: #1e1e1e;
@@ -25,6 +27,7 @@
     --radius: 14px;
     --shadow: 0 18px 50px rgba(0, 0, 0, .55);
     --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+    --font-ar: 'Cairo', 'Segoe UI', system-ui, sans-serif;
     /* Native form controls (select popups, scrollbars, checkboxes) follow the
        dark UI instead of the OS light palette across pywebview engines. */
     color-scheme: dark;
@@ -1517,6 +1520,56 @@
   .set-actions button { flex: 1; }
   .set-actions .btn-reset { background: transparent; border-color: var(--danger); color: var(--danger); }
   .set-actions .btn-reset:hover { background: rgba(255, 95, 110, .12); }
+
+  /* ---------- language toggle ---------- */
+  .lang-toggle {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .5px;
+    min-width: 38px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    transition: border-color .2s, color .2s;
+  }
+  .lang-toggle:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ---------- RTL support ---------- */
+  html[dir="rtl"] body { direction: rtl; font-family: var(--font-ar); }
+  html[dir="rtl"] .topnav { flex-direction: row-reverse; }
+  html[dir="rtl"] .nav-links { flex-direction: row-reverse; }
+  html[dir="rtl"] .nav-end { flex-direction: row-reverse; }
+  html[dir="rtl"] .nav-search { direction: rtl; }
+  html[dir="rtl"] .brand .dot { margin-left: 0; margin-right: 2px; }
+  html[dir="rtl"] .arrow { transform: scaleX(-1); }
+  html[dir="rtl"] .fnav { transform: scaleX(-1); }
+  html[dir="rtl"] .top10-sidebar { border-left: none; border-right: 1px solid var(--border-soft); }
+  html[dir="rtl"] .set-card { text-align: right; }
+  html[dir="rtl"] .set-row { flex-direction: row-reverse; }
+  html[dir="rtl"] .set-label { text-align: right; }
+  html[dir="rtl"] .home-columns { flex-direction: row-reverse; }
+  html[dir="rtl"] .details-topbar { flex-direction: row-reverse; }
+  html[dir="rtl"] .details-crumbs { margin-left: 0; margin-right: 12px; }
+  html[dir="rtl"] .player-stage { direction: rtl; }
+  html[dir="rtl"] .server-bar { flex-direction: row-reverse; }
+  html[dir="rtl"] .ep-actions { flex-direction: row-reverse; }
+  html[dir="rtl"] .anime-hero { flex-direction: row-reverse; }
+  html[dir="rtl"] .wt-modal-card { direction: rtl; }
+  html[dir="rtl"] .wt-modal-head { flex-direction: row-reverse; }
+  html[dir="rtl"] .wt-modal-actions { flex-direction: row-reverse; }
+  html[dir="rtl"] .preroll-card { direction: rtl; }
+  html[dir="rtl"] .hotkey-hint { text-align: right; }
+  html[dir="rtl"] .search-drop { direction: rtl; }
+  html[dir="rtl"] .set-actions { flex-direction: row-reverse; }
+  html[dir="rtl"] .card .title,
+  html[dir="rtl"] .f-title,
+  html[dir="rtl"] .featured-hero,
+  html[dir="rtl"] .top10-row .name,
+  html[dir="rtl"] .schedule-card .title { font-family: var(--font-ar); }
+  html[dir="rtl"] .update-banner { flex-direction: row-reverse; }
+  html[dir="rtl"] .wt-bar { flex-direction: row-reverse; }
+  html[dir="rtl"] .play-row { flex-direction: row-reverse; }
+  html[dir="rtl"] .empty, html[dir="rtl"] .grid { direction: rtl; }
+  html[dir="rtl"] .top10-num { margin-left: 0; margin-right: auto; }
 </style>
 </head>
 <body>
@@ -1525,16 +1578,17 @@
       AniNova <span class="grad">AR</span><span class="dot"></span>
     </button>
     <div class="nav-links">
-      <button class="nav-link active" id="navHome" data-nav="home">Home</button>
-      <button class="nav-link" id="navBrowse" data-nav="browse">Browse</button>
-      <button class="nav-link" id="navLibrary" data-nav="library">Library</button>
+      <button class="nav-link active" id="navHome" data-nav="home" data-i18n="nav.home">Home</button>
+      <button class="nav-link" id="navBrowse" data-nav="browse" data-i18n="nav.browse">Browse</button>
+      <button class="nav-link" id="navLibrary" data-nav="library" data-i18n="nav.library">Library</button>
     </div>
     <div class="nav-search">
-      <input id="q" type="text" placeholder="Search anime..." autofocus />
-      <button class="primary" id="btnSearch">Search</button>
+      <input id="q" type="text" placeholder="Search anime..." autofocus data-i18n-placeholder="search.placeholder" />
+      <button class="primary" id="btnSearch" data-i18n="search.button">Search</button>
     </div>
     <div class="nav-end">
       <span class="version" id="version">loading…</span>
+      <button class="icon-btn lang-toggle" id="btnLang" title="Switch language">AR</button>
       <button class="icon-btn" id="btnSettings" title="Settings">⚙</button>
       <button class="icon-btn" id="btnNotif" title="Notifications"><span style="position:relative">🔔<span class="badge"></span></span></button>
       <button class="avatar" id="btnProfile" title="Profile">AR</button>
@@ -1542,10 +1596,10 @@
   </nav>
 
   <div class="update-banner" id="updateBanner">
-    <span class="tag">Update</span>
+    <span class="tag" data-i18n="update.tag">Update</span>
     <span id="updateText">A new version is available.</span>
     <span class="spacer"></span>
-    <a href="https://github.com/np4abdou1/ani-cli-arabic/releases" target="_blank">See release →</a>
+    <a href="https://github.com/np4abdou1/ani-cli-arabic/releases" target="_blank" data-i18n="update.see_release">See release →</a>
   </div>
 
   <div class="wt-bar" id="wtBar">
@@ -1554,9 +1608,9 @@
     <span id="wtMembers" style="display:none"></span>
     <span id="skipText">Auto-skip: on</span>
     <span class="spacer"></span>
-    <button id="btnHost">Host Room</button>
-    <button id="btnJoin">Join Room</button>
-    <button id="btnLeave" style="display:none">Leave</button>
+    <button id="btnHost" data-i18n="wt.host_room">Host Room</button>
+    <button id="btnJoin" data-i18n="wt.join_room">Join Room</button>
+    <button id="btnLeave" style="display:none" data-i18n="wt.leave_room">Leave</button>
   </div>
 
   <main id="app">
@@ -1574,13 +1628,13 @@
 
       <!-- continue watching -->
       <div class="continue-wrap" id="continueWrap" style="display:none">
-        <div class="section-title" id="continueTitle">Continue Watching</div>
+        <div class="section-title" id="continueTitle" data-i18n="home.continue_watching">Continue Watching</div>
         <div class="strip continue-strip" id="continueStrip"></div>
       </div>
 
       <!-- my list (bookmarks) -->
       <div class="continue-wrap" id="myListWrap" style="display:none">
-        <div class="section-title" id="myListTitle">My List</div>
+        <div class="section-title" id="myListTitle" data-i18n="home.my_list">My List</div>
         <div class="strip continue-strip" id="myListStrip"></div>
       </div>
 
@@ -1594,11 +1648,11 @@
       <!-- trending grid + top 10 sidebar -->
       <div class="home-columns">
         <div class="home-main">
-          <div class="section-title" id="trendingTitle">Trending Now</div>
+          <div class="section-title" id="trendingTitle" data-i18n="home.trending_now">Trending Now</div>
           <div class="strip" id="trendingStrip"></div>
         </div>
         <aside class="top10-sidebar">
-          <div class="section-title">Top Trending</div>
+          <div class="section-title" data-i18n="home.top_trending">Top Trending</div>
           <div class="top10-list" id="top10List"></div>
         </aside>
       </div>
@@ -1606,14 +1660,14 @@
 
     <!-- ================= SEARCH RESULTS VIEW ================= -->
     <section class="view" id="search-results-view">
-      <div class="section-title" id="resultsTitle">Search Results</div>
+      <div class="section-title" id="resultsTitle" data-i18n="search.results_title">Search Results</div>
       <div class="grid" id="grid"></div>
     </section>
 
     <!-- ================= DETAILS / PLAYER VIEW ================= -->
     <section class="view" id="details-view">
       <div class="details-topbar">
-        <button class="back-btn" id="btnBack"><span class="arrow">←</span> Back to Search</button>
+        <button class="back-btn" id="btnBack" data-i18n="details.back_to_search"><span class="arrow">←</span> Back to Search</button>
         <span class="details-crumbs" id="crumbs"></span>
       </div>
 
@@ -1673,32 +1727,32 @@
               <div class="play-launch-title" id="epDetailTitle">Select an episode</div>
               <div class="play-launch-sub" id="epDetailSub"></div>
               <div class="play-row">
-                <span class="hint">Play with</span>
+                <span class="hint" data-i18n="details.play_with">Play with</span>
                 <select id="playerSel">
                   <option value="mpv">MPV</option>
                   <option value="vlc">VLC</option>
                 </select>
-                <span class="hint">Quality</span>
+                <span class="hint" data-i18n="details.quality">Quality</span>
                 <select id="resSel" title="Stream quality">
                   <option value="auto">Auto</option>
                   <option value="1080p">1080p</option>
                   <option value="720p">720p</option>
                   <option value="480p">480p</option>
                 </select>
-                <button class="primary big" id="btnPlayNow">▶ Play Now</button>
+                <button class="primary big" id="btnPlayNow" data-i18n="details.play_now">▶ Play Now</button>
               </div>
               <div class="ep-actions">
-                <span class="pill" id="actionPrev">← Prev</span>
-                <span class="pill" id="actionNext">Next →</span>
+                <span class="pill" id="actionPrev" data-i18n="details.prev">← Prev</span>
+                <span class="pill" id="actionNext" data-i18n="details.next">Next →</span>
               </div>
             </div>
           </div>
 
           <!-- bottom: server selection -->
           <div class="server-bar">
-            <span class="server-label">Audio</span>
+            <span class="server-label" data-i18n="details.audio">Audio</span>
             <div class="server-group" id="catGroup"></div>
-            <span class="server-label">Server</span>
+            <span class="server-label" data-i18n="details.server">Server</span>
             <div class="server-group" id="providerGroup"></div>
           </div>
         </div>
@@ -1710,20 +1764,20 @@
   <div class="wt-modal" id="wtModal">
     <div class="wt-modal-card">
       <div class="wt-modal-head">
-        <div class="wt-modal-title"><span class="wt-ic">👥</span> Watch2Gether</div>
+        <div class="wt-modal-title"><span class="wt-ic">👥</span> <span data-i18n="wt.title">Watch2Gether</span></div>
         <button class="wt-modal-close" id="wtModalClose" title="Close">✕</button>
       </div>
       <div class="wt-modal-status" id="wtModalStatus">
         <span class="dot"></span><span id="wtModalStatusText">Watch Together: offline</span>
       </div>
       <div class="wt-modal-actions">
-        <button class="primary" id="wtModalHost">Host Room</button>
-        <button id="wtModalJoin">Join Room</button>
-        <button id="wtModalLeave" style="display:none">Leave Room</button>
+        <button class="primary" id="wtModalHost" data-i18n="wt.host_room">Host Room</button>
+        <button id="wtModalJoin" data-i18n="wt.join_room">Join Room</button>
+        <button id="wtModalLeave" style="display:none" data-i18n="wt.leave_room">Leave Room</button>
       </div>
-      <div class="wt-modal-label">Room Members</div>
+      <div class="wt-modal-label" data-i18n="wt.room_members">Room Members</div>
       <div class="wt-member-list" id="wtMemberList"></div>
-      <div class="wt-modal-hint">Guests sync to the host's playback automatically over the room socket.</div>
+      <div class="wt-modal-hint" data-i18n="wt.modal_hint">Guests sync to the host's playback automatically over the room socket.</div>
     </div>
   </div>
 
@@ -1731,16 +1785,16 @@
   <div class="set-modal" id="settingsModal">
     <div class="set-card">
       <div class="set-head">
-        <div class="set-title"><span class="set-ic">⚙</span> Settings</div>
+        <div class="set-title"><span class="set-ic">⚙</span> <span data-i18n="settings.title">Settings</span></div>
         <button class="set-close" id="setModalClose" title="Close">✕</button>
       </div>
       <div class="set-scroll">
         <div class="set-section">
-          <div class="set-section-title">Playback</div>
+          <div class="set-section-title" data-i18n="settings.playback">Playback</div>
           <div class="set-row">
             <div class="set-label">
-              <div class="set-name">Default quality</div>
-              <div class="set-desc">Used when auto-detect can't pick a stream, and as the base for Arabic tracks.</div>
+              <div class="set-name" data-i18n="settings.default_quality">Default quality</div>
+              <div class="set-desc" data-i18n="settings.default_quality_desc">Used when auto-detect can't pick a stream, and as the base for Arabic tracks.</div>
             </div>
             <div class="set-field">
               <select id="setDefaultQuality">
@@ -1752,8 +1806,8 @@
           </div>
           <div class="set-row">
             <div class="set-label">
-              <div class="set-name">Aspect ratio override</div>
-              <div class="set-desc">Forces mpv to render at this ratio. Auto keeps the source aspect.</div>
+              <div class="set-name" data-i18n="settings.aspect_ratio">Aspect ratio override</div>
+              <div class="set-desc" data-i18n="settings.aspect_ratio_desc">Forces mpv to render at this ratio. Auto keeps the source aspect.</div>
             </div>
             <div class="set-field">
               <select id="setAspectRatio">
@@ -1765,8 +1819,8 @@
           </div>
           <div class="set-row">
             <div class="set-label">
-              <div class="set-name">Custom player hotkeys</div>
-              <div class="set-desc">Enables AniNova's tuned keybindings on the native mpv window.</div>
+              <div class="set-name" data-i18n="settings.custom_keys">Custom player hotkeys</div>
+              <div class="set-desc" data-i18n="settings.custom_keys_desc">Enables AniNova's tuned keybindings on the native mpv window.</div>
             </div>
             <div class="set-field">
               <label class="switch"><input type="checkbox" id="setCustomKeys"><span class="slider"></span></label>
@@ -1774,8 +1828,8 @@
           </div>
           <div class="set-row">
             <div class="set-label">
-              <div class="set-name">Auto-play next episode</div>
-              <div class="set-desc">Continues to the next episode when playback finishes.</div>
+              <div class="set-name" data-i18n="settings.auto_next">Auto-play next episode</div>
+              <div class="set-desc" data-i18n="settings.auto_next_desc">Continues to the next episode when playback finishes.</div>
             </div>
             <div class="set-field">
               <label class="switch"><input type="checkbox" id="setAutoNext"><span class="slider"></span></label>
@@ -1784,11 +1838,11 @@
         </div>
 
         <div class="set-section">
-          <div class="set-section-title">Auto-Skip</div>
+          <div class="set-section-title" data-i18n="settings.auto_skip_section">Auto-Skip</div>
           <div class="set-row">
             <div class="set-label">
-              <div class="set-name">Skip intros / outros</div>
-              <div class="set-desc">Auto-seeks past opening &amp; ending themes using the AniSkip database (English track).</div>
+              <div class="set-name" data-i18n="settings.auto_skip">Skip intros / outros</div>
+              <div class="set-desc" data-i18n="settings.auto_skip_desc">Auto-seeks past opening &amp; ending themes using the AniSkip database (English track).</div>
             </div>
             <div class="set-field">
               <label class="switch"><input type="checkbox" id="setAutoSkipEnabled"><span class="slider"></span></label>
@@ -1796,8 +1850,8 @@
           </div>
           <div class="set-row">
             <div class="set-label">
-              <div class="set-name">Skip on-screen message</div>
-              <div class="set-desc">Show a small player notification when an intro/outro is skipped.</div>
+              <div class="set-name" data-i18n="settings.auto_skip_osd">Skip on-screen message</div>
+              <div class="set-desc" data-i18n="settings.auto_skip_osd_desc">Show a small player notification when an intro/outro is skipped.</div>
             </div>
             <div class="set-field">
               <label class="switch"><input type="checkbox" id="setAutoSkipOsd"><span class="slider"></span></label>
@@ -1806,11 +1860,11 @@
         </div>
 
         <div class="set-section">
-          <div class="set-section-title">Pre-Roll</div>
+          <div class="set-section-title" data-i18n="settings.preroll">Pre-Roll</div>
           <div class="set-row">
             <div class="set-label">
-              <div class="set-name">Pre-roll buffer</div>
-              <div class="set-desc">Show a countdown buffer (or configured ad video) before playback starts.</div>
+              <div class="set-name" data-i18n="settings.preroll_buffer">Pre-roll buffer</div>
+              <div class="set-desc" data-i18n="settings.preroll_buffer_desc">Show a countdown buffer (or configured ad video) before playback starts.</div>
             </div>
             <div class="set-field">
               <label class="switch"><input type="checkbox" id="setPrerollEnabled"><span class="slider"></span></label>
@@ -1818,26 +1872,26 @@
           </div>
           <div class="set-row">
             <div class="set-label">
-              <div class="set-name">Pre-roll video URL</div>
-              <div class="set-desc">Optional video (mp4/webm) played during the buffer. Empty = branded countdown.</div>
+              <div class="set-name" data-i18n="settings.preroll_url">Pre-roll video URL</div>
+              <div class="set-desc" data-i18n="settings.preroll_url_desc">Optional video (mp4/webm) played during the buffer. Empty = branded countdown.</div>
             </div>
             <div class="set-field"><input type="text" id="setPrerollUrl" placeholder="https://…/ad.mp4"></div>
           </div>
           <div class="set-row">
             <div class="set-label">
-              <div class="set-name">Pre-roll seconds</div>
-              <div class="set-desc">Buffer length (1–120 seconds).</div>
+              <div class="set-name" data-i18n="settings.preroll_seconds">Pre-roll seconds</div>
+              <div class="set-desc" data-i18n="settings.preroll_seconds_desc">Buffer length (1–120 seconds).</div>
             </div>
             <div class="set-field"><input type="number" id="setPrerollSeconds" min="1" max="120" step="1"></div>
           </div>
         </div>
 
         <div class="set-section">
-          <div class="set-section-title">Watch Together &amp; Hotkeys</div>
+          <div class="set-section-title" data-i18n="settings.wt_hotkeys">Watch Together &amp; Hotkeys</div>
           <div class="set-row">
             <div class="set-label">
-              <div class="set-name">System-wide hotkeys</div>
-              <div class="set-desc">Global play/pause &amp; seek while hosting a room.</div>
+              <div class="set-name" data-i18n="settings.system_hotkeys">System-wide hotkeys</div>
+              <div class="set-desc" data-i18n="settings.system_hotkeys_desc">Global play/pause &amp; seek while hosting a room.</div>
             </div>
             <div class="set-field">
               <label class="switch"><input type="checkbox" id="setHotkeysEnabled"><span class="slider"></span></label>
@@ -1845,44 +1899,44 @@
           </div>
           <div class="set-row">
             <div class="set-label">
-              <div class="set-name">Hotkey seek step</div>
-              <div class="set-desc">Seconds skipped per seek-hotkey press (1–300).</div>
+              <div class="set-name" data-i18n="settings.hotkey_step">Hotkey seek step</div>
+              <div class="set-desc" data-i18n="settings.hotkey_step_desc">Seconds skipped per seek-hotkey press (1–300).</div>
             </div>
             <div class="set-field"><input type="number" id="setSkipSeconds" min="1" max="300" step="1"></div>
           </div>
           <div class="set-row">
-            <div class="set-label"><div class="set-name">Play / Pause</div></div>
+            <div class="set-label"><div class="set-name" data-i18n="settings.play_pause">Play / Pause</div></div>
             <div class="set-field"><input type="text" id="setHotkeyPlayPause" spellcheck="false">
               <div class="hotkey-hint">Format: ctrl+alt+p</div></div>
           </div>
           <div class="set-row">
-            <div class="set-label"><div class="set-name">Seek forward</div></div>
+            <div class="set-label"><div class="set-name" data-i18n="settings.seek_forward">Seek forward</div></div>
             <div class="set-field"><input type="text" id="setHotkeySeekFwd" spellcheck="false">
               <div class="hotkey-hint">Format: ctrl+alt+right</div></div>
           </div>
           <div class="set-row">
-            <div class="set-label"><div class="set-name">Seek backward</div></div>
+            <div class="set-label"><div class="set-name" data-i18n="settings.seek_backward">Seek backward</div></div>
             <div class="set-field"><input type="text" id="setHotkeySeekBack" spellcheck="false">
               <div class="hotkey-hint">Format: ctrl+alt+left</div></div>
           </div>
           <div class="set-row">
-            <div class="set-label"><div class="set-name">Next episode</div></div>
+            <div class="set-label"><div class="set-name" data-i18n="settings.next_ep">Next episode</div></div>
             <div class="set-field"><input type="text" id="setHotkeyNext" spellcheck="false">
               <div class="hotkey-hint">Format: ctrl+alt+up</div></div>
           </div>
           <div class="set-row">
-            <div class="set-label"><div class="set-name">Previous episode</div></div>
+            <div class="set-label"><div class="set-name" data-i18n="settings.prev_ep">Previous episode</div></div>
             <div class="set-field"><input type="text" id="setHotkeyPrev" spellcheck="false">
               <div class="hotkey-hint">Format: ctrl+alt+down</div></div>
           </div>
         </div>
 
         <div class="set-section">
-          <div class="set-section-title">Player &amp; Downloads</div>
+          <div class="set-section-title" data-i18n="settings.player_downloads">Player &amp; Downloads</div>
           <div class="set-row">
             <div class="set-label">
-              <div class="set-name">Preferred player</div>
-              <div class="set-desc">Used when starting playback or hosting a room ("Ask" = choose each time).</div>
+              <div class="set-name" data-i18n="settings.preferred_player">Preferred player</div>
+              <div class="set-desc" data-i18n="settings.preferred_player_desc">Used when starting playback or hosting a room ("Ask" = choose each time).</div>
             </div>
             <div class="set-field">
               <select id="setPlayer">
@@ -1892,8 +1946,8 @@
           </div>
           <div class="set-row">
             <div class="set-label">
-              <div class="set-name">Download quality</div>
-              <div class="set-desc">Quality used for the core CLI downloader.</div>
+              <div class="set-name" data-i18n="settings.download_quality">Download quality</div>
+              <div class="set-desc" data-i18n="settings.download_quality_desc">Quality used for the core CLI downloader.</div>
             </div>
             <div class="set-field">
               <select id="setDownloadQuality">
@@ -1905,8 +1959,8 @@
           </div>
           <div class="set-row">
             <div class="set-label">
-              <div class="set-name">Download mode</div>
-              <div class="set-desc">Internal = app-managed downloader; external = hand off to a download tool.</div>
+              <div class="set-name" data-i18n="settings.download_mode">Download mode</div>
+              <div class="set-desc" data-i18n="settings.download_mode_desc">Internal = app-managed downloader; external = hand off to a download tool.</div>
             </div>
             <div class="set-field">
               <select id="setDownloadMode">
@@ -1916,19 +1970,19 @@
           </div>
           <div class="set-row">
             <div class="set-label">
-              <div class="set-name">Download directory</div>
-              <div class="set-desc">Folder used by the core downloader (relative to home).</div>
+              <div class="set-name" data-i18n="settings.download_dir">Download directory</div>
+              <div class="set-desc" data-i18n="settings.download_dir_desc">Folder used by the core downloader (relative to home).</div>
             </div>
             <div class="set-field"><input type="text" id="setDownloadDir" spellcheck="false"></div>
           </div>
         </div>
 
         <div class="set-section">
-          <div class="set-section-title">Language &amp; Provider</div>
+          <div class="set-section-title" data-i18n="settings.lang_provider">Language &amp; Provider</div>
           <div class="set-row">
             <div class="set-label">
-              <div class="set-name">Preferred language</div>
-              <div class="set-desc">Default audio track &amp; subtitle language.</div>
+              <div class="set-name" data-i18n="settings.preferred_lang">Preferred language</div>
+              <div class="set-desc" data-i18n="settings.preferred_lang_desc">Default audio track &amp; subtitle language.</div>
             </div>
             <div class="set-field">
               <select id="setPreferredLang">
@@ -1940,8 +1994,8 @@
           </div>
           <div class="set-row">
             <div class="set-label">
-              <div class="set-name">Preferred provider</div>
-              <div class="set-desc">Server tried first when resolving streams (Auto = chain order).</div>
+              <div class="set-name" data-i18n="settings.preferred_provider">Preferred provider</div>
+              <div class="set-desc" data-i18n="settings.preferred_provider_desc">Server tried first when resolving streams (Auto = chain order).</div>
             </div>
             <div class="set-field">
               <select id="setPreferredProvider">
@@ -1955,11 +2009,11 @@
         </div>
 
         <div class="set-section">
-          <div class="set-section-title">Appearance</div>
+          <div class="set-section-title" data-i18n="settings.appearance">Appearance</div>
           <div class="set-row">
             <div class="set-label">
-              <div class="set-name">Theme</div>
-              <div class="set-desc">Accent palette for the interface.</div>
+              <div class="set-name" data-i18n="settings.theme">Theme</div>
+              <div class="set-desc" data-i18n="settings.theme_desc">Accent palette for the interface.</div>
             </div>
             <div class="set-field">
               <select id="setTheme"></select>
@@ -1968,11 +2022,11 @@
         </div>
 
         <div class="set-section">
-          <div class="set-section-title">Privacy</div>
+          <div class="set-section-title" data-i18n="settings.privacy">Privacy</div>
           <div class="set-row">
             <div class="set-label">
-              <div class="set-name">Discord Rich Presence</div>
-              <div class="set-desc">Show what you're watching on your Discord profile.</div>
+              <div class="set-name" data-i18n="settings.discord_rpc">Discord Rich Presence</div>
+              <div class="set-desc" data-i18n="settings.discord_rpc_desc">Show what you're watching on your Discord profile.</div>
             </div>
             <div class="set-field">
               <label class="switch"><input type="checkbox" id="setDiscordRpc"><span class="slider"></span></label>
@@ -1980,8 +2034,8 @@
           </div>
           <div class="set-row">
             <div class="set-label">
-              <div class="set-name">Show Watch Together Room Code on Discord</div>
-              <div class="set-desc">Allow friends on Discord to see your active Watch Together room code.</div>
+              <div class="set-name" data-i18n="settings.show_room_code">Show Watch Together Room Code on Discord</div>
+              <div class="set-desc" data-i18n="settings.show_room_code_desc">Allow friends on Discord to see your active Watch Together room code.</div>
             </div>
             <div class="set-field">
               <label class="switch"><input type="checkbox" id="setShowRoomCode"><span class="slider"></span></label>
@@ -1989,8 +2043,8 @@
           </div>
           <div class="set-row">
             <div class="set-label">
-              <div class="set-name">Anonymous analytics</div>
-              <div class="set-desc">Share anonymous usage stats to improve the app. No personal data.</div>
+              <div class="set-name" data-i18n="settings.analytics">Anonymous analytics</div>
+              <div class="set-desc" data-i18n="settings.analytics_desc">Share anonymous usage stats to improve the app. No personal data.</div>
             </div>
             <div class="set-field">
               <label class="switch"><input type="checkbox" id="setAnalytics"><span class="slider"></span></label>
@@ -1999,8 +2053,8 @@
         </div>
       </div>
       <div class="set-actions">
-        <button class="btn-reset" id="setReset">Reset to defaults</button>
-        <button class="primary" id="setSave">Save Settings</button>
+        <button class="btn-reset" id="setReset" data-i18n="settings.reset">Reset to defaults</button>
+        <button class="primary" id="setSave" data-i18n="settings.save">Save Settings</button>
       </div>
     </div>
   </div>
@@ -2021,23 +2075,406 @@
       </div>
       <div class="preroll-timer" id="prerollTimer">
         <span class="preroll-count" id="prerollCount">5</span>
-        <span class="preroll-label">Stream starting in seconds…</span>
+        <span class="preroll-label" data-i18n="preroll.label">Stream starting in seconds…</span>
       </div>
-      <div class="preroll-lock" id="prerollLock">Player controls are locked until the stream is ready</div>
+      <div class="preroll-lock" id="prerollLock" data-i18n="preroll.lock">Player controls are locked until the stream is ready</div>
     </div>
   </div>
 
   <!-- ================= LIVE SEARCH DROPDOWN ================= -->
   <div class="search-drop" id="searchDrop">
     <div class="search-drop-head">
-      <span id="searchDropTitle">Search results</span>
+      <span id="searchDropTitle" data-i18n="search.dropdown_title">Search results</span>
       <button class="search-drop-close" id="searchDropClose" title="Close">✕</button>
     </div>
     <div class="search-drop-list" id="searchDropList"></div>
-    <div class="search-drop-empty" id="searchDropEmpty">No matches — press Enter to search all titles</div>
+    <div class="search-drop-empty" id="searchDropEmpty" data-i18n="search.no_matches">No matches — press Enter to search all titles</div>
   </div>
 
 <script>
+  // ---------- i18n ----------
+  const I18N = {
+    en: {
+      "nav.home": "Home", "nav.browse": "Browse", "nav.library": "Library",
+      "search.placeholder": "Search anime...", "search.button": "Search",
+      "search.results_title": "Search Results", "search.dropdown_title": "Search results",
+      "search.no_matches": "No matches \u2014 press Enter to search all titles",
+      "home.trending_now": "Trending Now", "home.top_trending": "Top Trending",
+      "home.continue_watching": "Continue Watching", "home.my_list": "My List",
+      "home.upcoming_week": "Upcoming This Week",
+      "details.back_to_search": "\u2190 Back to Search", "details.play_with": "Play with",
+      "details.quality": "Quality", "details.play_now": "\u25b6 Play Now",
+      "details.prev": "\u2190 Prev", "details.next": "Next \u2192",
+      "details.audio": "Audio", "details.server": "Server",
+      "details.select_episode": "Select an episode",
+      "details.no_episodes": "No episodes", "details.episodes_count": "{n} episodes",
+      "details.no_details": "No details available.",
+      "details.no_synopsis": "No synopsis available.",
+      "details.no_episodes_server": "No episodes available on this server.",
+      "details.no_episodes_filter": "No matches \u2014 press Enter to search all titles",
+      "details.show_more": "Show more", "details.show_less": "Show less",
+      "details.genres": "Genres", "details.loading": "Loading\u2026",
+      "details.loading_episodes": "Loading episodes\u2026",
+      "details.failed_episodes": "Failed to load episodes",
+      "details.failed_details": "Failed to load details",
+      "details.select_episode_hint": "Select an episode",
+      "wt.title": "Watch2Gether", "wt.host_room": "Host Room",
+      "wt.join_room": "Join Room", "wt.leave_room": "Leave Room",
+      "wt.room_members": "Room Members",
+      "wt.modal_hint": "Guests sync to the host's playback automatically over the room socket.",
+      "wt.offline": "Watch Together: offline",
+      "wt.status": "Watch Together: {role} in room {code}",
+      "wt.host_label": " (host)",
+      "settings.title": "Settings",
+      "settings.save": "Save Settings", "settings.reset": "Reset to defaults",
+      "settings.playback": "Playback",
+      "settings.default_quality": "Default quality",
+      "settings.default_quality_desc": "Used when auto-detect can't pick a stream, and as the base for Arabic tracks.",
+      "settings.aspect_ratio": "Aspect ratio override",
+      "settings.aspect_ratio_desc": "Forces mpv to render at this ratio. Auto keeps the source aspect.",
+      "settings.custom_keys": "Custom player hotkeys",
+      "settings.custom_keys_desc": "Enables AniNova's tuned keybindings on the native mpv window.",
+      "settings.auto_next": "Auto-play next episode",
+      "settings.auto_next_desc": "Continues to the next episode when playback finishes.",
+      "settings.auto_skip_section": "Auto-Skip",
+      "settings.auto_skip": "Skip intros / outros",
+      "settings.auto_skip_desc": "Auto-seeks past opening & ending themes using the AniSkip database (English track).",
+      "settings.auto_skip_osd": "Skip on-screen message",
+      "settings.auto_skip_osd_desc": "Show a small player notification when an intro/outro is skipped.",
+      "settings.wt_hotkeys": "Watch Together & Hotkeys",
+      "settings.system_hotkeys": "System-wide hotkeys",
+      "settings.system_hotkeys_desc": "Global play/pause & seek while hosting a room.",
+      "settings.hotkey_step": "Hotkey seek step",
+      "settings.hotkey_step_desc": "Seconds skipped per seek-hotkey press (1\u2013300).",
+      "settings.play_pause": "Play / Pause", "settings.seek_forward": "Seek forward",
+      "settings.seek_backward": "Seek backward", "settings.next_ep": "Next episode",
+      "settings.prev_ep": "Previous episode",
+      "settings.player_downloads": "Player & Downloads",
+      "settings.preferred_player": "Preferred player",
+      "settings.preferred_player_desc": "Used when starting playback or hosting a room (\"Ask\" = choose each time).",
+      "settings.download_quality": "Download quality",
+      "settings.download_quality_desc": "Quality used for the core CLI downloader.",
+      "settings.download_mode": "Download mode",
+      "settings.download_mode_desc": "Internal = app-managed downloader; external = hand off to a download tool.",
+      "settings.download_dir": "Download directory",
+      "settings.download_dir_desc": "Folder used by the core downloader (relative to home).",
+      "settings.lang_provider": "Language & Provider",
+      "settings.preferred_lang": "Preferred language",
+      "settings.preferred_lang_desc": "Default audio track & subtitle language.",
+      "settings.preferred_provider": "Preferred provider",
+      "settings.preferred_provider_desc": "Server tried first when resolving streams (Auto = chain order).",
+      "settings.appearance": "Appearance",
+      "settings.theme": "Theme",
+      "settings.theme_desc": "Accent palette for the interface.",
+      "settings.preroll": "Pre-Roll",
+      "settings.preroll_buffer": "Pre-roll buffer",
+      "settings.preroll_buffer_desc": "Show a countdown buffer (or configured ad video) before playback starts.",
+      "settings.preroll_url": "Pre-roll video URL",
+      "settings.preroll_url_desc": "Optional video (mp4/webm) played during the buffer. Empty = branded countdown.",
+      "settings.preroll_seconds": "Pre-roll seconds",
+      "settings.preroll_seconds_desc": "Buffer length (1\u2013120 seconds).",
+      "settings.privacy": "Privacy",
+      "settings.discord_rpc": "Discord Rich Presence",
+      "settings.discord_rpc_desc": "Show what you're watching on your Discord profile.",
+      "settings.show_room_code": "Show Watch Together Room Code on Discord",
+      "settings.show_room_code_desc": "Allow friends on Discord to see your active Watch Together room code.",
+      "settings.analytics": "Anonymous analytics",
+      "settings.analytics_desc": "Share anonymous usage stats to improve the app. No personal data.",
+      "preroll.preparing": "Preparing your stream\u2026",
+      "preroll.ad": "Advertisement",
+      "preroll.label": "Stream starting in seconds\u2026",
+      "preroll.lock": "Player controls are locked until the stream is ready",
+      "update.tag": "Update", "update.see_release": "See release \u2192",
+      "toast.library": "Library view is coming soon.",
+      "toast.no_notif": "No new notifications.",
+      "toast.no_members": "No members yet — host a room to invite friends.",
+      "toast.signed_in": "Signed in as Local User",
+      "toast.settings_saved": "Settings saved", "toast.left_room": "Left the room",
+      "toast.failed_join": "Failed to join room",
+      "toast.failed_save": "Failed to save settings",
+      "toast.bridge": "PyWebView bridge not available",
+      "toast.search_failed": "Search failed",
+      "toast.no_episode": "No episode selected",
+      "toast.list_failed": "Could not update My List",
+      "toast.reset_done": "Settings reset to defaults",
+      "auto_skip.on": "Auto-skip: on", "auto_skip.off": "Auto-skip: off",
+      "schedule.upcoming": "Upcoming This Week",
+      "schedule.upcoming_day": "Upcoming · {day}",
+      "episodes.count": "{n} episodes",
+      "days.sun": "SUN", "days.mon": "MON", "days.tue": "TUE", "days.wed": "WED",
+      "days.thu": "THU", "days.fri": "FRI", "days.sat": "SAT",
+      "badge.featured": "FEATURED", "badge.trending": "TRENDING", "badge.free": "FREE",
+      "badge.sources": "{n} sources", "badge.source": "1 source",
+      "badge.tv": "TV", "badge.movie": "MOVIE", "badge.ova": "OVA", "badge.special": "SPECIAL",
+      "action.watch_free": "▶ WATCH FREE"
+    },
+    ar: {
+      "nav.home": "الرئيسية", "nav.browse": "تصفح", "nav.library": "المكتبة",
+      "search.placeholder": "ابحث عن أنمي...", "search.button": "بحث",
+      "search.results_title": "نتائج البحث", "search.dropdown_title": "نتائج البحث",
+      "search.no_matches": "لا توجد نتائج \u2014 اضغط Enter للبحث في كل العناوين",
+      "home.trending_now": "الرائج الآن", "home.top_trending": "الأكثر رواجًا",
+      "home.continue_watching": "متابعة المشاهدة", "home.my_list": "قائمتي",
+      "home.upcoming_week": "قادم هذا الأسبوع",
+      "details.back_to_search": "العودة للبحث \u2190", "details.play_with": "تشغيل بـ",
+      "details.quality": "الجودة", "details.play_now": "\u25b6 شغل الآن",
+      "details.prev": "\u2190 السابق", "details.next": "التالي \u2192",
+      "details.audio": "الصوت", "details.server": "الخادم",
+      "details.select_episode": "اختر حلقة",
+      "details.no_episodes": "لا توجد حلقات", "details.episodes_count": "{n} حلقات",
+      "details.no_details": "لا تتوفر تفاصيل.",
+      "details.no_synopsis": "لا يوجد ملخص.",
+      "details.no_episodes_server": "لا توجد حلقات على هذا الخادم.",
+      "details.no_episodes_filter": "لا توجد نتائج \u2014 اضغط Enter للبحث في كل العناوين",
+      "details.show_more": "عرض المزيد", "details.show_less": "عرض أقل",
+      "details.genres": "التصنيفات", "details.loading": "جاري التحميل\u2026",
+      "details.loading_episodes": "جاري تحميل الحلقات\u2026",
+      "details.failed_episodes": "فشل تحميل الحلقات",
+      "details.failed_details": "فشل تحميل التفاصيل",
+      "details.select_episode_hint": "اختر حلقة",
+      "wt.title": "شاهد معًا", "wt.host_room": "إنشاء غرفة",
+      "wt.join_room": "الدخول لغرفة", "wt.leave_room": "مغادرة الغرفة",
+      "wt.room_members": "أعضاء الغرفة",
+      "wt.modal_hint": "يتم مزامنة المشاهدة مع المضيف تلقائيًا عبر اتصال الغرفة.",
+      "wt.offline": "شاهد معًا: غير متصل",
+      "wt.status": "شاهد معًا: {role} في الغرفة {code}",
+      "wt.host_label": " (مضيف)",
+      "settings.title": "الإعدادات",
+      "settings.save": "حفظ الإعدادات", "settings.reset": "إعادة تعيين",
+      "settings.playback": "التشغيل",
+      "settings.default_quality": "الجودة الافتراضية",
+      "settings.default_quality_desc": "تُستخدم عندما لا يتمكن الكشف التلقائي من اختيار البث، وكنقطة انطلاق للمسارات العربية.",
+      "settings.aspect_ratio": "نسبة العرض",
+      "settings.aspect_ratio_desc": "يُجبر mpv على العرض بهذه النسبة. التلقائي يحافظ على النسبة الأصلية.",
+      "settings.custom_keys": "مفاتيح مخصصة",
+      "settings.custom_keys_desc": "تفعيل اختصارات AniNova المخصصة على نافذة mpv الأصلية.",
+      "settings.auto_next": "التشغيل التلقائي للحلقة التالية",
+      "settings.auto_next_desc": "ينتقل تلقائيًا للحلقة التالية عند انتهاء التشغيل.",
+      "settings.auto_skip_section": "التخطي التلقائي",
+      "settings.auto_skip": "تخطي المقدمة والنهاية",
+      "settings.auto_skip_desc": "تخطي تلقائي لمواضيع الافتتاحية والنهاية باستخدام قاعدة بيانات AniSkip (المسار الإنجليزي).",
+      "settings.auto_skip_osd": "رسالة التخطي",
+      "settings.auto_skip_osd_desc": "عرض إشعار صغير عند تخطي المقدمة أو النهاية.",
+      "settings.wt_hotkeys": "شاهد معًا واختصارات",
+      "settings.system_hotkeys": "مفاتيح اختصار شاملة",
+      "settings.system_hotkeys_desc": "تشغيل/إيقاف وتقديم/ترجيع عالمي عند استضافة غرفة.",
+      "settings.hotkey_step": "خطوات التقديم",
+      "settings.hotkey_step_desc": "الثوانٍ المُتخطاة عند كل ضغطة (1\u2013300).",
+      "settings.play_pause": "تشغيل / إيقاف", "settings.seek_forward": "تقديم",
+      "settings.seek_backward": "ترجيع", "settings.next_ep": "الحلقة التالية",
+      "settings.prev_ep": "الحلقة السابقة",
+      "settings.player_downloads": "المشغل والتنزيلات",
+      "settings.preferred_player": "المشغل المفضل",
+      "settings.preferred_player_desc": "يُستخدم عند بدء التشغيل أو استضافة غرفة (\"اسأل\" =Выбор في كل مرة).",
+      "settings.download_quality": "جودة التنزيل",
+      "settings.download_quality_desc": "الجودة المستخدمة في أداة التنزيل الأساسية.",
+      "settings.download_mode": "وضع التنزيل",
+      "settings.download_mode_desc": "داخلي = أداة تنزيل مُدارة من التطبيق؛ خارجي = تسليم لأداة تنزيل خارجية.",
+      "settings.download_dir": "مجلد التنزيل",
+      "settings.download_dir_desc": "المجلد المستخدم في التنزيل (نسبي للمنزل).",
+      "settings.lang_provider": "اللغة والمزوّد",
+      "settings.preferred_lang": "اللغة المفضلة",
+      "settings.preferred_lang_desc": "المسار الصوتي والترجمة الافتراضية.",
+      "settings.preferred_provider": "المزوّد المفضل",
+      "settings.preferred_provider_desc": "الخادم الأول المُجرب عند حل البث (التلقائي = ترتيب السلسلة).",
+      "settings.appearance": "المظهر",
+      "settings.theme": "السمة",
+      "settings.theme_desc": "لوحة الألوان للواجهة.",
+      "settings.preroll": "البادئ",
+      "settings.preroll_buffer": "البادئ",
+      "settings.preroll_buffer_desc": "عرض عد تنازلي (أو فيديو إعلان مُعد) قبل بدء التشغيل.",
+      "settings.preroll_url": "رابط فيديو البادئ",
+      "settings.preroll_url_desc": "فيديو اختياري (mp4/webm) يُشغّل أثناء الانتظار. فارغ = عد تنازلي بالعلامة التجارية.",
+      "settings.preroll_seconds": "ثوانٍ البادئ",
+      "settings.preroll_seconds_desc": "مدة الانتظار (1\u2013120 ثانية).",
+      "settings.privacy": "الخصوصية",
+      "settings.discord_rpc": "Discord Rich Presence",
+      "settings.discord_rpc_desc": "إظهار ما تشاهده على ملف Discord الخاص بك.",
+      "settings.show_room_code": "إظهار رمز الغرفة على Discord",
+      "settings.show_room_code_desc": "السماح لأصدقائك على Discord برؤية رمز غرفة شاهد معًا.",
+      "settings.analytics": "إحصائيات مجهولة",
+      "settings.analytics_desc": "مشاركة إحصائيات استخدام مجهولة لتحسين التطبيق. لا توجد بيانات شخصية.",
+      "preroll.preparing": "جاري تجهيز البث\u2026",
+      "preroll.ad": "إعلان",
+      "preroll.label": "يبدأ البث خلال ثوانٍ\u2026",
+      "preroll.lock": "التحكم في المشغل مقفل حتى جاهزية البث",
+      "update.tag": "تحديث", "update.see_release": "عرض الإصدار \u2192",
+      "toast.library": "عرض المكتبة قادم قريبًا.",
+      "toast.no_notif": "لا توجد إشعارات جديدة.",
+      "toast.no_members": "لا يوجد أعضاء بعد — أنشئ غرفة لدعوة الأصدقاء.",
+      "toast.signed_in": "تم تسجيل الدخول كمستخدم محلي",
+      "toast.settings_saved": "تم حفظ الإعدادات", "toast.left_room": "تم مغادرة الغرفة",
+      "toast.failed_join": "فشل الدخول للغرفة",
+      "toast.failed_save": "فشل حفظ الإعدادات",
+      "toast.bridge": "جسر PyWebView غير متاح",
+      "toast.search_failed": "فشل البحث",
+      "toast.no_episode": "لم يتم اختيار حلقة",
+      "toast.list_failed": "فشل تحديث قائمتي",
+      "toast.reset_done": "تم إعادة تعيين الإعدادات",
+      "auto_skip.on": "التخطي التلقائي: مفعّل", "auto_skip.off": "التخطي التلقائي: معطّل",
+      "schedule.upcoming": "قادم هذا الأسبوع",
+      "schedule.upcoming_day": "قادم · {day}",
+      "episodes.count": "{n} حلقة",
+      "days.sun": "الأحد", "days.mon": "الإثنين", "days.tue": "الثلاثاء", "days.wed": "الأربعاء",
+      "days.thu": "الخميس", "days.fri": "الجمعة", "days.sat": "السبت",
+      "badge.featured": "مميز", "badge.trending": "رائج", "badge.free": "مجاني",
+      "badge.sources": "{n} مصادر", "badge.source": "مصدر واحد",
+      "badge.tv": "مسلسل", "badge.movie": "فيلم", "badge.ova": "OVA", "badge.special": "خاص",
+      "action.watch_free": "▶ شاهد مجاناً"
+    }
+  };
+
+  // ---------- Anime Title Mapping (EN → AR) ----------
+  const ANIME_TITLES_AR = {
+    "naruto": "ناروتو",
+    "naruto shippuden": "ناروتو شيبودن",
+    "naruto shippuuden": "ناروتو شيبودن",
+    "bleach": "بليتش",
+    "dragon ball": "دراغون بول",
+    "dragon ball z": "دراغون بول زد",
+    "dragon ball super": "دراغون بول سوبر",
+    "one piece": "ون بيس",
+    "attack on titan": "هجوم العمالقة",
+    "shingeki no kyojin": "هجوم العمالقة",
+    "death note": "مذكرة الموت",
+    "fullmetal alchemist": "الخيميائي المعدني الكامل",
+    "fullmetal alchemist: brotherhood": "الخيميائي المعدني الكامل: الأخوية",
+    "demon slayer": "قاتل الشياطين",
+    "kimetsu no yaiba": "قاتل الشياطين",
+    "my hero academia": "أكاديميتي للأبطال",
+    "boku no hero academia": "أكاديميتي للأبطال",
+    "sword art online": "سورد آرت أونلاين",
+    "tokyo ghoul": "طوكيو غول",
+    "hunter x hunter": "هنتر × هنتر",
+    "jujutsu kaisen": "جوجوتسو كايسن",
+    "spy x family": "سباي × فاميلي",
+    "chainsaw man": "رجل المنشار",
+    "steins gate": "ستاينز جيت",
+    "steins;gate": "ستاينز جيت",
+    "code geass": "كود غياس",
+    "cowboy bebop": "كاوبوي بيبوب",
+    "one punch man": "ون بنش مان",
+    "mob psycho 100": "موب سايكو 100",
+    "haikyuu": "هايكيو",
+    "kuroko no basket": "كوروكو نو باسكت",
+    "fairy tail": "ذيل الجنية",
+    "black clover": "البرسيم الأسود",
+    "fire force": "قوة النار",
+    "grand blue": "جراند بلو",
+    "grand blue dreaming": "جراند بلو دريمنغ",
+    "gintama": "غينتاما",
+    "fruits basket": "سلة الفواكه",
+    "your name": "اسمك",
+    "kimi no na wa": "اسمك",
+    "spirited away": "المخطوفة",
+    "weathering with you": "طقس معك",
+    "tenki no ko": "طقس معك",
+    "violet evergarden": "فايلت إيفرغاردن",
+    "the promised neverland": "نيفرلاند الموعودة",
+    "yakusoku no neverland": "نيفرلاند الموعودة",
+    "parasyte": "الطفيلي",
+    "kiseijuu": "الطفيلي",
+    "classroom of the elite": "صف النخبة",
+    "youkoso jitsuryoku": "صف النخبة",
+    "re:zero": "ري: زيرو",
+    "konosuba": "كونوسوبا",
+    "overlord": "أوفرلورد",
+    "no game no life": "لا لعبة لا حياة",
+    "the rising of the shield hero": "نهوض بطل الدرع",
+    "tate no yuusha": "نهوض بطل الدرع",
+    "vinland saga": "ملحمة فينلاند",
+    "made in abyss": "صُنع في الهاوية",
+    "goblin slayer": "قاتل الغوبلن",
+    "dr. stone": "دكتور ستون",
+    "that time i got reincarnated as a slime": "ذلك الوقت الذي تجسدت فيه كوحل",
+    "tensei shitara slime": "ذلك الوقت الذي تجسدت فيه كوحل",
+    "mushoku tensei": "موشوكو تنسي",
+    "jobless reincarnation": "موشوكو تنسي",
+    "solo leveling": "سولو ليفلنغ",
+    "horimiya": "هوريميا",
+    "kaguya-sama": "كاغويا-ساما",
+    "toradora": "تورادورا",
+    "clannad": "كلاناد",
+    "angel beats": "أنجل بيتس",
+    "your lie in april": "كذبتك في أبريل",
+    "shigatsu wa kimi no uso": "كذبتك في أبريل",
+    "anohana": "أنوهانا",
+    "a silent voice": "صوت صامت",
+    "koe no katachi": "صوت صامت",
+    "erased": "محو",
+    "boku dake ga inai machi": "محو",
+    "code:breaker": "كود: بريكر",
+    "akame ga kill": "أكامي غا كيل",
+    "blue exorcist": "المُطهّر الأزرق",
+    "ao no exorcist": "المُطهّر الأزرق",
+    "noragami": "نوراغامي",
+    "magi": "ماجي",
+    "soul eater": "سول إيتر",
+    "durarara": "دورارارا",
+    "baccano": "باكانو",
+    "black lagoon": "البحيرة السوداء",
+    "hellsing": "هيلسنج",
+    "trigun": "ترايغن",
+    "samurai champloo": "ساموراي تشامبلو",
+    "fate/zero": "فيت/زيرو",
+    "fate/stay night": "فيت/ستاي نايت",
+    "monogatari": "موناغاتاري",
+    "bakemonogatari": "باكيموناغاتاري"
+  };
+
+  function localizeAnimeTitle(title) {
+    if (currentLang !== "ar" || !title) return title;
+    const normalized = String(title).toLowerCase().trim();
+    return ANIME_TITLES_AR[normalized] || title;
+  }
+
+  let currentLang = "en";
+  try { currentLang = localStorage.getItem("aninova-lang") || "en"; } catch(e) {}
+
+  function t(key, params) {
+    const dict = I18N[currentLang] || I18N.en;
+    let text = dict[key] || I18N.en[key] || key;
+    if (params) for (const [k, v] of Object.entries(params)) text = text.replace("{" + k + "}", v);
+    return text;
+  }
+
+  function applyTranslations() {
+    document.documentElement.lang = currentLang === "ar" ? "ar" : "en";
+    document.documentElement.dir = currentLang === "ar" ? "rtl" : "ltr";
+    document.querySelectorAll("[data-i18n]").forEach(el => {
+      const key = el.dataset.i18n;
+      const val = t(key);
+      if (val !== key) el.textContent = val;
+    });
+    document.querySelectorAll("[data-i18n-placeholder]").forEach(el => {
+      const key = el.dataset.i18nPlaceholder;
+      const val = t(key);
+      if (val !== key) el.placeholder = val;
+    });
+    document.querySelectorAll("[data-i18n-title]").forEach(el => {
+      const key = el.dataset.i18nTitle;
+      const val = t(key);
+      if (val !== key) el.title = val;
+    });
+    const langBtn = $("#btnLang");
+    if (langBtn) {
+      langBtn.textContent = currentLang === "en" ? "عربي" : "EN";
+      langBtn.title = currentLang === "en" ? "العربية" : "English";
+    }
+    if (typeof refreshWt === "function") refreshWt();
+    if (typeof refreshAutoSkip === "function") refreshAutoSkip();
+  }
+
+  function setLanguage(lang) {
+    currentLang = lang;
+    try { localStorage.setItem("aninova-lang", lang); } catch(e) {}
+    applyTranslations();
+  }
+
+  function toggleLanguage() {
+    setLanguage(currentLang === "en" ? "ar" : "en");
+  }
+
   let apiCache = null;
 
   async function getApi() {
@@ -2207,7 +2644,7 @@
         fillSettingsForm(appSettings);
         syncPlayerControls(appSettings);
         refreshAutoSkip();
-        toast("Settings saved");
+        toast(t("toast.settings_saved"));
         closeSettings();
       } else {
         toast((res && res.error) || "Failed to save settings", true);
@@ -2226,7 +2663,7 @@
         applyTheme(appSettings.theme);
         syncPlayerControls(appSettings);
         refreshAutoSkip();
-        toast("Settings reset to defaults");
+        toast(t("toast.reset_done"));
       } else {
         toast((res && res.error) || "Failed to reset settings", true);
       }
@@ -2290,7 +2727,7 @@
         maybeFinish = () => { if (left <= 0 && videoEnded) finish(); };
 
         countEl.textContent = String(left);
-        msgEl.textContent = videoUrl ? "Advertisement" : "Preparing your stream…";
+        msgEl.textContent = videoUrl ? t("preroll.ad") : t("preroll.preparing");
         spinEl.style.display = videoUrl ? "none" : "flex";
         videoEl.style.display = videoUrl ? "block" : "none";
         if (videoUrl) {
@@ -2377,9 +2814,9 @@
   $("#btnBrand").addEventListener("click", goHome);
   $("#navHome").addEventListener("click", goHome);
   $("#navBrowse").addEventListener("click", goHome);
-  $("#navLibrary").addEventListener("click", () => toast("Library view is coming soon."));
-  $("#btnNotif").addEventListener("click", () => toast("No new notifications."));
-  $("#btnProfile").addEventListener("click", () => toast("Signed in as Local User"));
+  $("#navLibrary").addEventListener("click", () => toast(t("toast.library")));
+  $("#btnNotif").addEventListener("click", () => toast(t("toast.no_notif")));
+  $("#btnProfile").addEventListener("click", () => toast(t("toast.signed_in")));
 
   // "Back to Search" returns to the search-results-view (or home if none).
   $("#btnBack").addEventListener("click", () => {
@@ -2411,17 +2848,17 @@
     const metaEl = card.querySelector(".hover-card");
     if (!metaEl || metaEl.dataset.loaded) return;
     const id = r && r.id;
-    if (!id) { metaEl.innerHTML = '<div class="hc-empty">No details available.</div>'; metaEl.dataset.loaded = "1"; return; }
+    if (!id) { metaEl.innerHTML = `<div class="hc-empty">${t("details.no_details")}</div>`; metaEl.dataset.loaded = "1"; return; }
     if (metaCache[id]) { populateHoverMeta(metaEl, metaCache[id]); return; }
     card.addEventListener("mouseenter", () => {
       if (metaEl.dataset.loaded) return;
-      metaEl.innerHTML = '<div class="hc-empty">Loading…</div>';
+      metaEl.innerHTML = `<div class="hc-empty">${t("details.loading")}</div>`;
       getApi().then(api => {
         if (!api || !api.get_anime_meta) { metaEl.dataset.loaded = "1"; return; }
         return api.get_anime_meta(id).catch(() => null);
       }).then(m => {
         if (!m || !Object.keys(m).length) {
-          metaEl.innerHTML = '<div class="hc-empty">No details available.</div>';
+          metaEl.innerHTML = `<div class="hc-empty">${t("details.no_details")}</div>`;
           metaEl.dataset.loaded = "1";
           return;
         }
@@ -2436,7 +2873,7 @@
     const status = m.status ? `<span class="hc-status">${esc(m.status)}</span>` : "";
     const syn = m.description
       ? `<div class="hc-synopsis">${esc(m.description)}</div>`
-      : '<div class="hc-empty">No synopsis available.</div>';
+      : `<div class="hc-empty">${t("details.no_synopsis")}</div>`;
     metaEl.innerHTML = `${rating || status ? `<div class="hc-row">${rating}${status}</div>` : ""}${syn}`;
     metaEl.dataset.loaded = "1";
   }
@@ -2451,7 +2888,15 @@
       .filter(Boolean).join(" · ");
     const srcCount = (r.providers && r.providers.length) ? r.providers.length : 0;
     const isTrending = r.provider === "trending";
-    const badgeText = isTrending ? "TRENDING" : (srcCount > 1 ? `${srcCount} sources` : "FREE");
+    let badgeText;
+    if (isTrending) {
+      badgeText = t("badge.trending");
+    } else if (srcCount > 1) {
+      badgeText = t("badge.sources", {n: srcCount});
+    } else {
+      badgeText = t("badge.free");
+    }
+    const displayTitle = localizeAnimeTitle(r.title);
     card.innerHTML = `
       <div class="poster-wrap">
         ${poster}
@@ -2461,7 +2906,7 @@
         <div class="play-overlay"><span class="disc">▶</span></div>
       </div>
       <div class="meta">
-        <div class="title">${esc(r.title)}</div>
+        <div class="title">${esc(displayTitle)}</div>
         <div class="provider">${esc(badges)}</div>
       </div>`;
     attachHoverMeta(card, r);
@@ -2481,11 +2926,11 @@
     grid.innerHTML = '<div class="spinner"></div>';
     try {
       const api = await getApi();
-      if (!api) { toast("PyWebView bridge not available", true); return; }
+      if (!api) { toast(t("toast.bridge"), true); return; }
       const results = await api.search(q);
       renderGrid(results);
     } catch (e) {
-      grid.innerHTML = '<div class="empty">Search failed</div>';
+      grid.innerHTML = `<div class="empty">${t("toast.search_failed")}</div>`;
       toast(String(e), true);
     }
   }
@@ -2670,15 +3115,21 @@
     featuredItems.forEach((r, i) => {
       const slide = document.createElement("div");
       slide.className = "featured-slide";
+      const typeKey = r.type ? "badge." + r.type.toLowerCase() : null;
+      const typeText = typeKey ? t(typeKey) : t("badge.tv");
+      const featuredText = t("badge.featured");
+      const tagText = `${featuredText} · ${esc(typeText)}`;
+      const displayTitle = localizeAnimeTitle(r.title);
+      const watchFreeText = t("action.watch_free");
       slide.innerHTML = `
         <div class="f-bg" style="background-image:url('${r.backdrop}')"></div>
         <div class="f-shade"></div>
         <div class="f-content">
-          <div class="f-tag">Featured · ${esc(r.type)}</div>
-          <h2 class="f-title">${esc(r.title)}</h2>
+          <div class="f-tag">${tagText}</div>
+          <h2 class="f-title">${esc(displayTitle)}</h2>
           ${r.description ? `<p class="f-desc">${esc(r.description)}</p>` : ""}
           <div class="f-actions">
-            <button class="primary f-play">▶ WATCH FREE</button>
+            <button class="primary f-play">${watchFreeText}</button>
           </div>
         </div>`;
       slide.querySelector(".f-play").addEventListener("click", () => openDetails(featuredItems[i]));
@@ -2716,14 +3167,16 @@
 
   function buildScheduleBar() {
     const now = new Date();
-    const todayIdx = now.getDay(); // 0 = Sunday
+    const todayIdx = now.getDay();
     activeDay = DAY_ORDER[todayIdx].toLowerCase();
     $("#scheduleBar").innerHTML = DAY_ORDER.map((name, i) => {
       const d = new Date(now);
       d.setDate(now.getDate() - todayIdx + i);
       const key = name.toLowerCase();
+      const dayKey = "days." + key;
+      const displayName = t(dayKey);
       return `<button class="day-pill ${key === activeDay ? "active" : ""}" data-day="${key}">
-        <span class="day-name">${name}</span>
+        <span class="day-name">${displayName}</span>
         <span class="day-date">${d.getDate()}</span>
       </button>`;
     }).join("");
@@ -2752,7 +3205,7 @@
   function renderSchedule() {
     const items = activeDay ? scheduleData.filter(x => x.day === activeDay) : scheduleData;
     const dayName = DAY_ORDER.find(n => n.toLowerCase() === activeDay);
-    $("#scheduleTitle").textContent = dayName ? `Upcoming · ${dayName}` : "Upcoming This Week";
+    $("#scheduleTitle").textContent = dayName ? t("schedule.upcoming_day", {day: dayName}) : t("schedule.upcoming");
     const strip = $("#scheduleStrip");
     strip.innerHTML = "";
     if (!items.length) {
@@ -2768,6 +3221,7 @@
     const poster = r.poster
       ? `<img class="poster" src="${r.poster}" alt="" referrerpolicy="no-referrer" onerror="this.outerHTML='<div class=poster.ph>◆</div>'" />`
       : '<div class="poster ph">◆</div>';
+    const displayTitle = localizeAnimeTitle(r.title);
     card.innerHTML = `
       <div class="poster-wrap">
         ${poster}
@@ -2777,7 +3231,7 @@
         <div class="hover-card"></div>
       </div>
       <div class="meta">
-        <div class="title">${esc(r.title)}</div>
+        <div class="title">${esc(displayTitle)}</div>
         <div class="provider">${esc(cap(r.day))}</div>
       </div>`;
     attachHoverMeta(card, r);
@@ -2855,6 +3309,7 @@
       ? `<img class="poster" src="${r.poster}" alt="" referrerpolicy="no-referrer" onerror="this.outerHTML='<div class=poster.ph>◆</div>'" />`
       : '<div class="poster ph">◆</div>';
     const pct = (r.progress != null) ? Math.round(Math.min(Math.max(r.progress, 0), 1) * 100) : 0;
+    const displayTitle = localizeAnimeTitle(r.title);
     card.innerHTML = `
       <div class="poster-wrap">
         ${poster}
@@ -2863,10 +3318,10 @@
         <div class="hover-card"></div>
       </div>
       <div class="meta">
-        <div class="title">${esc(r.title)}</div>
+        <div class="title">${esc(displayTitle)}</div>
         <div class="provider">${r.progress != null ? `${pct}% · Ep ${esc(String(r.episode))}` : `Resume · Ep ${esc(String(r.episode))}`}</div>
       </div>`;
-attachHoverMeta(card, r);
+    attachHoverMeta(card, r);
     const anime = { id: r.anime_id, title: r.title, poster: r.poster, provider: "trending" };
     bindCardBookmark(card, r);
     card.addEventListener("click", () => openDetails(anime));
@@ -2899,7 +3354,7 @@ attachHoverMeta(card, r);
       toast(state ? "Added to My List" : "Removed from My List");
       return state;
     } catch (e) {
-      toast("Could not update My List", true);
+      toast(t("toast.list_failed"), true);
       return false;
     }
   }
@@ -2946,6 +3401,7 @@ attachHoverMeta(card, r);
     const poster = r.poster
       ? `<img class="poster" src="${r.poster}" alt="" referrerpolicy="no-referrer" onerror="this.outerHTML='<div class=poster.ph>◆</div>'" />`
       : '<div class="poster ph">◆</div>';
+    const displayTitle = localizeAnimeTitle(r.title);
     card.innerHTML = `
       <div class="poster-wrap">
         ${poster}
@@ -2953,7 +3409,7 @@ attachHoverMeta(card, r);
         <div class="hover-card"></div>
       </div>
       <div class="meta">
-        <div class="title">${esc(r.title)}</div>
+        <div class="title">${esc(displayTitle)}</div>
         <div class="provider">${r.year ? esc(String(r.year)) : "My List"}</div>
       </div>`;
     attachHoverMeta(card, r);
@@ -2980,7 +3436,7 @@ attachHoverMeta(card, r);
     selectedEp = null;
     const token = ++detailsToken;
     showView("details-view");
-    $("#crumbs").textContent = "Loading details…";
+    $("#crumbs").textContent = t("details.loading");
     setHeroLoading();
 
     const api = await getApi();
@@ -3003,14 +3459,14 @@ attachHoverMeta(card, r);
       renderDetails();
     } catch (e) {
       if (token !== detailsToken) return;
-      $("#crumbs").textContent = "Failed to load details";
+      $("#crumbs").textContent = t("details.failed_details");
       toast(String(e), true);
     }
   }
 
   function setHeroLoading() {
     $("#detTitle").textContent = current ? current.title : "";
-    $("#detAltTitles").textContent = "Loading…";
+    $("#detAltTitles").textContent = t("details.loading");
     $("#detScore").textContent = "…";
     $("#detPills").innerHTML = "";
     $("#detGenres").innerHTML = "";
@@ -3024,7 +3480,7 @@ attachHoverMeta(card, r);
       $("#backdrop").style.backgroundImage = "none";
     }
     $("#epList").innerHTML = '<div class="ep-empty">Loading episodes…</div>';
-    $("#epDetailTitle").textContent = "Select an episode";
+    $("#epDetailTitle").textContent = t("details.select_episode");
     $("#epDetailSub").textContent = "";
   }
 
@@ -3032,9 +3488,10 @@ attachHoverMeta(card, r);
     if (!details) return;
 
     const title = details.title || current.title;
-    $("#detTitle").textContent = title;
+    const displayTitle = localizeAnimeTitle(title);
+    $("#detTitle").textContent = displayTitle;
     $("#crumbs").textContent = `${details.type || ""} · ${details.premiered || ""}`
-      .replace(/^\s*·\s*/, "").replace(/\s*·\s*$/, "").replace(/\s*·\s*/g, " · ") || title;
+      .replace(/^\s*·\s*/, "").replace(/\s*·\s*$/, "").replace(/\s*·\s*/g, " · ") || displayTitle;
 
     const altParts = [];
     if (details.romaji && details.romaji !== title) altParts.push(details.romaji);
@@ -3068,7 +3525,7 @@ attachHoverMeta(card, r);
 
     const syn = details.description || "No synopsis available.";
     $("#detSynopsis").textContent = syn;
-    $("#synToggle").textContent = "Show more";
+    $("#synToggle").textContent = t("details.show_more");
     $("#synToggle").style.display = syn.length > 230 ? "inline-block" : "none";
     $("#detSynopsis").parentElement.classList.remove("expanded");
 
@@ -3096,7 +3553,7 @@ attachHoverMeta(card, r);
       $("#epSearch").value = "";
     } else {
       $("#epList").innerHTML = '<div class="ep-empty">No episodes available on this server.</div>';
-      $("#epDetailTitle").textContent = "No episodes";
+      $("#epDetailTitle").textContent = t("details.no_episodes");
       $("#epDetailSub").textContent = "Try a different server or audio track.";
     }
   }
@@ -3162,7 +3619,7 @@ attachHoverMeta(card, r);
 
   // ---------- episode list ----------
   function renderEpisodeList() {
-    $("#epCount").textContent = `${episodes.length} episodes`;
+    $("#epCount").textContent = t("episodes.count", {n: episodes.length});
     const filter = $("#epSearch").value.trim();
     $("#epList").innerHTML = "";
     for (const ep of episodes) {
@@ -3204,7 +3661,7 @@ attachHoverMeta(card, r);
 
   // ---------- playback ----------
   async function playEp(ep) {
-    if (!ep) return toast("No episode selected", true);
+    if (!ep) return toast(t("toast.no_episode"), true);
     const player = $("#playerSel").value;
     const resolution = $("#resSel").value || "auto";
     toast(`Resolving stream for Ep ${fmtEp(ep.episode_num)} with ${player.toUpperCase()}…`);
@@ -3254,7 +3711,7 @@ attachHoverMeta(card, r);
   $("#synToggle").addEventListener("click", () => {
     const box = $("#detSynopsis").parentElement;
     const expanded = box.classList.toggle("expanded");
-    $("#synToggle").textContent = expanded ? "Show less" : "Show more";
+    $("#synToggle").textContent = expanded ? t("details.show_less") : t("details.show_more");
   });
 
   // ---------- episode search ----------
@@ -3292,7 +3749,7 @@ attachHoverMeta(card, r);
     try {
       const st = await api.auto_skip_status();
       const el = $("#skipText");
-      if (el) el.textContent = `Auto-skip: ${st && st.enabled ? "on" : "off"}`;
+      if (el) el.textContent = t(st && st.enabled ? "auto_skip.on" : "auto_skip.off");
     } catch (e) {}
   }
 
@@ -3304,9 +3761,9 @@ attachHoverMeta(card, r);
     const members = $("#wtMembers");
     if (s && s.active) {
       bar.classList.add("active");
-      text.textContent = `Watch Together: ${s.role} in room ${s.code}`;
+      text.textContent = t("wt.status", {role: s.role, code: s.code});
       if (roster.length) {
-        members.textContent = ` · ${roster.map(m => cap(m.name) + (m.role === "host" ? " (host)" : "")).join(", ")}`;
+        members.textContent = ` · ${roster.map(m => cap(m.name) + (m.role === "host" ? t("wt.host_label") : "")).join(", ")}`;
         members.style.display = "inline";
       } else {
         members.textContent = "";
@@ -3315,7 +3772,7 @@ attachHoverMeta(card, r);
       leave.style.display = "inline-block";
     } else {
       bar.classList.remove("active");
-      text.textContent = "Watch Together: offline";
+      text.textContent = t("wt.offline");
       members.textContent = "";
       members.style.display = "none";
       leave.style.display = "none";
@@ -3326,14 +3783,14 @@ attachHoverMeta(card, r);
     const status = $("#wtModalStatus");
     status.classList.toggle("active", !!(s && s.active));
     $("#wtModalStatusText").textContent = (s && s.active)
-      ? `Connected as ${s.role} in room ${s.code}`
-      : "Watch Together: offline";
+      ? t("wt.status", {role: s.role, code: s.code})
+      : t("wt.offline");
     $("#wtModalLeave").style.display = (s && s.active) ? "inline-block" : "none";
 
     const list = $("#wtMemberList");
     list.innerHTML = "";
     if (!roster || !roster.length) {
-      list.innerHTML = '<div class="wt-empty">No members yet — host a room to invite friends.</div>';
+      list.innerHTML = `<div class="wt-empty">${t("toast.no_members")}</div>`;
       return;
     }
     for (const m of roster) {
@@ -3382,7 +3839,7 @@ attachHoverMeta(card, r);
 
   async function doLeave() {
     try { const api = await getApi(); await api.leave_room(); } catch (e) {}
-    toast("Left the room");
+    toast(t("toast.left_room"));
     refreshWt();
   }
 
@@ -3414,6 +3871,8 @@ attachHoverMeta(card, r);
     return String(s == null ? "" : s).replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
   }
 
+  $("#btnLang").addEventListener("click", toggleLanguage);
+  try { applyTranslations(); } catch(e) { console.error("i18n init failed:", e); }
   refreshWt();
   refreshAutoSkip();
   loadSettings().then(s => {
@@ -3428,10 +3887,6 @@ attachHoverMeta(card, r);
   loadContinue();
   loadMyList();
   refreshBookmarks();
-  loadFeatured();
-  loadTop10();
-  buildScheduleBar();
-  loadSchedule();
 </script>
 </body>
 </html>
