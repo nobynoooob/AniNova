@@ -1815,6 +1815,15 @@ class WatchGuest:
         self._last_seek_ts = now
         self._apply_speed(1.0, force=True)
         self._ewma_drift = 0.0
+        # Telemetry: drift grew past the hard-seek band and is being corrected.
+        # Coarse timing only — no room codes or member identities.
+        try:
+            from .monitoring import monitor
+            monitor.track_sync_error(
+                "guest", drift_seconds=float(drift), corrected=True
+            )
+        except Exception:
+            pass
         threading.Thread(
             target=lambda: self._ipc.seek(float(target_time)),
             daemon=True,

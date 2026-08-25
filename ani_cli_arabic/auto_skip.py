@@ -278,7 +278,7 @@ class AutoSkipMonitor:
             except Exception:
                 pass
 
-    def _trigger(self, interval: SkipInterval) -> None:
+    def _trigger(self, interval: SkipInterval, pos: Optional[float] = None) -> None:
         try:
             self._ipc.seek(interval.end)
         except Exception:
@@ -308,10 +308,14 @@ class AutoSkipMonitor:
             except Exception:
                 pass
         # Telemetry: an Auto-Skip actually fired (op/ed/recap) — fire on the
-        # async analytics worker, never here.
+        # async analytics worker, never here. ``delay_seconds`` (position minus
+        # window start at fire time) is the accuracy/latency signal.
         try:
             from .monitoring import monitor
-            monitor.track_skip(interval.skip_type)
+            delay = None
+            if pos is not None and interval.end > interval.start:
+                delay = max(float(pos) - float(interval.start), 0.0)
+            monitor.track_skip(interval.skip_type, accurate=True, delay_seconds=delay)
         except Exception:
             pass
 
@@ -383,7 +387,7 @@ class AutoSkipMonitor:
                     crossed_forward = last_pos is not None and last_pos < interval.start
                     fresh_entry = (pos - interval.start) <= TRIGGER_WINDOW
                     if crossed_forward or fresh_entry:
-                        self._trigger(interval)
+                        self._trigger(interval, pos=pos)
                 last_pos = pos
                 time.sleep(POLL_INTERVAL)
         finally:

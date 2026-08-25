@@ -285,3 +285,225 @@ def overview(
         "by_version": dict(by_version),
         "by_action": dict(by_action),
     }
+
+
+# ---------------------------------------------------------------------------
+# Analytics view endpoints
+#
+# Every view below is defined in schema.sql and is AniNova-scoped (client =
+# 'AniNova' baked into the view definitions), so legacy ani-cli-ar rows can
+# never leak into these metrics. Queries run with the service-role key, which
+# bypasses RLS; the security_invoker views keep anon-key dashboard access
+# fingerprint-scoped.
+# ---------------------------------------------------------------------------
+
+def _query_view(view: str, limit: int = 200, order: str = "", extra: Dict[str, str] = None):
+    """Query one SQL analytics view through PostgREST. Returns a list."""
+    params: Dict[str, Any] = {"select": "*", "limit": str(max(1, min(int(limit), 2000)))}
+    if order:
+        params["order"] = order
+    for key, value in (extra or {}).items():
+        params[key] = value
+    resp = requests.get(
+        f"{SUPABASE_URL}/rest/v1/{view}",
+        params=params,
+        headers={
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}",
+        },
+        timeout=10,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    if not isinstance(data, list):
+        raise ValueError(f"unexpected response shape from {view}")
+    return data
+
+
+def _query_one(view: str, extra: Dict[str, str] = None) -> dict:
+    """Single-row views (aggregates): return {} when empty instead of 404-ish []."""
+    rows = _query_view(view, limit=1, extra=extra)
+    return rows[0] if rows else {}
+
+
+@app.get("/active")
+def active_users(x_auth_key: Optional[str] = Header(default=None)):
+    """Real-time active users (heartbeat seen in the last 5 minutes)."""
+    _check_auth(x_auth_key)
+    try:
+        return {"source": "remote", "active": _query_one("v_active_users")}
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Failed to query telemetry: {exc}")
+
+
+@app.get("/audience")
+def audience(x_auth_key: Optional[str] = Header(default=None)):
+    """DAU series (30d) + WAU/MAU totals."""
+    _check_auth(x_auth_key)
+    try:
+        return {
+            "source": "remote",
+            "dau_daily": _query_view("v_dau_daily", limit=30, order="day.desc"),
+            "totals": _query_one("v_mau_monthly"),
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Failed to query telemetry: {exc}")
+
+
+@app.get("/sessions")
+def sessions(x_auth_key: Optional[str] = Header(default=None)):
+    """Session tracking: closed sessions per day with duration stats."""
+    _check_auth(x_auth_key)
+    try:
+        return {
+            "source": "remote",
+            "sessions_daily": _query_view("v_sessions", limit=60, order="day.desc"),
+            "watch_duration_by_anime": _query_view(
+                "v_watch_duration", limit=50, order="total_watch_seconds.desc"
+            ),
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Failed to query telemetry: {exc}")
+
+
+@app.get("/systems")
+def systems(x_auth_key: Optional[str] = Header(default=None)):
+    """System specs & comps: OS breakdown, player preference, version spread."""
+    _check_auth(x_auth_key)
+    try:
+        return {
+            "source": "remote",
+            "specs": _query_view("v_system_specs", limit=100, order="events.desc"),
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Failed to query telemetry: {exc}")
+
+
+@app.get("/errors")
+def errors(
+    limit: int = 20,
+    x_auth_key: Optional[str] = Header(default=None),
+):
+    """Error log summary + recent full stack traces (playback crashes)."""
+    _check_auth(x_auth_key)
+    try:
+        return {
+            "source": "remote",
+            "summary": _query_view("v_error_summary", limit=100, order="occurrences.desc"),
+            "traces": _query_view("v_error_traces", limit=limit),
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Failed to query telemetry: {exc}")
+
+
+@app.get("/providers")
+def providers(x_auth_key: Optional[str] = Header(default=None)):
+    """Provider success/failure rates + recent fallback switches."""
+    _check_auth(x_auth_key)
+    try:
+        return {
+            "source": "remote",
+            "stats": _query_view("v_provider_stats", limit=50, order="successes.desc"),
+            "fallbacks": _query_view("v_fallbacks", limit=50),
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Failed to query telemetry: {exc}")
+
+
+@app.get("/content")
+def content(x_auth_key: Optional[str] = Header(default=None)):
+    """Content tops: top played anime ranking + search language distribution."""
+    _check_auth(x_auth_key)
+    try:
+        return {
+            "source": "remote",
+            "top_anime": _query_view("v_top_anime", limit=25, order="plays.desc"),
+            "search_languages": _query_view("v_search_languages", limit=20, order="searches.desc"),
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Failed to query telemetry: {exc}")
+
+
+@app.get("/watch-together")
+def watch_together_metrics(x_auth_key: Optional[str] = Header(default=None)):
+    """Watch Together metrics: rooms, host/guest ratio, durations, sync errors."""
+    _check_auth(x_auth_key)
+    try:
+        return {
+            "source": "remote",
+            "summary": _query_one("v_watch_together"),
+            "trend": _query_view("v_room_trend", limit=60, order="day.desc"),
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Failed to query telemetry: {exc}")
+
+
+@app.get("/auto-skip")
+def auto_skip_metrics(x_auth_key: Optional[str] = Header(default=None)):
+    """Auto-Skip insights: OP/ED trigger counts, latency & accuracy."""
+    _check_auth(x_auth_key)
+    try:
+        return {
+            "source": "remote",
+            "skips": _query_view("v_auto_skip", limit=20, order="triggers.desc"),
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Failed to query telemetry: {exc}")
+
+
+@app.get("/ui")
+def ui_metrics(x_auth_key: Optional[str] = Header(default=None)):
+    """Rich Presence toggle rates + theme preferences."""
+    _check_auth(x_auth_key)
+    try:
+        return {
+            "source": "remote",
+            "features": _query_view("v_rpc_ui", limit=50, order="events.desc"),
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Failed to query telemetry: {exc}")
+
+
+@app.get("/stream-quality")
+def stream_quality(x_auth_key: Optional[str] = Header(default=None)):
+    """Performance: provider resolve times (p50/p95), buffer stalls, quality mix."""
+    _check_auth(x_auth_key)
+    try:
+        return {
+            "source": "remote",
+            "resolve_times": _query_view("v_stream_quality", limit=50, order="plays.desc"),
+            "buffer_stalls": _query_view("v_buffer_stalls", limit=60, order="day.desc"),
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Failed to query telemetry: {exc}")
+
+
+@app.get("/dashboard")
+def dashboard(x_auth_key: Optional[str] = Header(default=None)):
+    """One-shot snapshot combining every metric domain (small limits)."""
+    _check_auth(x_auth_key)
+    out: Dict[str, Any] = {"source": "remote"}
+    failures: Dict[str, str] = {}
+    sections = {
+        "active": lambda: {"active": _query_one("v_active_users")},
+        "audience_totals": lambda: _query_one("v_mau_monthly"),
+        "top_anime": lambda: _query_view("v_top_anime", limit=10, order="plays.desc"),
+        "search_languages": lambda: _query_view("v_search_languages", limit=10, order="searches.desc"),
+        "systems": lambda: _query_view("v_system_specs", limit=20, order="events.desc"),
+        "providers": lambda: _query_view("v_provider_stats", limit=15, order="successes.desc"),
+        "errors": lambda: _query_view("v_error_summary", limit=10, order="occurrences.desc"),
+        "sessions": lambda: _query_view("v_sessions", limit=14, order="day.desc"),
+        "watch_together": lambda: _query_one("v_watch_together"),
+        "auto_skip": lambda: _query_view("v_auto_skip", limit=10, order="triggers.desc"),
+        "rpc_ui": lambda: _query_view("v_rpc_ui", limit=15, order="events.desc"),
+        "stream_quality": lambda: _query_view("v_stream_quality", limit=15, order="plays.desc"),
+        "daily_summary": lambda: _query_view("v_daily_summary", limit=90, order="day.desc"),
+    }
+    for name, fn in sections.items():
+        try:
+            out[name] = fn()
+        except Exception as exc:
+            failures[name] = str(exc)
+    if failures:
+        out["partial_failures"] = failures
+    return out

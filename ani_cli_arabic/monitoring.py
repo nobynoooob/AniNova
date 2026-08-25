@@ -316,6 +316,7 @@ class MonitoringSystem:
         ui: str = "gui",
         watch_start: float = None,
         watch_end: float = None,
+        resolve_ms: float = None,
     ) -> None:
         details: Dict[str, Any] = {
             "anime": anime_title,
@@ -326,6 +327,11 @@ class MonitoringSystem:
             "quality": quality or "",
             "ui": ui or "gui",
         }
+        if resolve_ms is not None:
+            try:
+                details["resolve_ms"] = round(max(float(resolve_ms), 0.0), 1)
+            except (TypeError, ValueError):
+                pass
         if watch_start is not None and watch_end is not None:
             try:
                 start = float(watch_start)
@@ -337,14 +343,68 @@ class MonitoringSystem:
                 pass
         self._enqueue("video_play", details)
 
-    def track_watch_together(self, role: str, event: str, members: int = 1) -> None:
+    def track_provider_fallback(
+        self, from_provider: str, to_provider: str = "", reason: str = ""
+    ) -> None:
+        """A provider failed to produce a stream and the chain moved on.
+
+        Feeds v_provider_stats (failure rates) and v_fallbacks. Providers only —
+        never URLs or titles."""
+        self._enqueue("provider_fallback", {
+            "from_provider": str(from_provider or ""),
+            "to_provider": str(to_provider or ""),
+            "reason": str(reason or "")[:120],
+        })
+
+    def track_buffer_stall(
+        self, anime: str = "", episode: str = "", stalled_seconds: float = None
+    ) -> None:
+        """Playback stalled waiting on the network (buffer underrun)."""
+        details: Dict[str, Any] = {
+            "anime": str(anime or ""),
+            "episode": str(episode or ""),
+        }
+        if stalled_seconds is not None:
+            try:
+                details["stalled_seconds"] = round(max(float(stalled_seconds), 0.0), 2)
+            except (TypeError, ValueError):
+                pass
+        self._enqueue("buffer_stall", details)
+
+    def track_sync_error(
+        self, role: str, drift_seconds: float = None, corrected: bool = True
+    ) -> None:
+        """Watch Together sync correction (drift exceeded the hard-seek band).
+
+        Coarse timing only — no room codes or member identities."""
+        details: Dict[str, Any] = {
+            "role": str(role or "guest"),
+            "corrected": bool(corrected),
+        }
+        if drift_seconds is not None:
+            try:
+                details["drift_seconds"] = round(float(drift_seconds), 3)
+            except (TypeError, ValueError):
+                pass
+        self._enqueue("sync_error", details)
+
+    def track_watch_together(
+        self, role: str, event: str, members: int = 1, duration_s: float = None
+    ) -> None:
         """Watch Together engagement. ``role`` is host|guest, ``event`` one of
-        create|join|leave|end. Only member counts are sent — never room codes."""
-        self._enqueue("room_event", {
+        create|join|leave|end. Only member counts are sent — never room codes.
+        ``duration_s`` (optional) carries the room session length on leave/end."""
+        details: Dict[str, Any] = {
             "role": str(role or "guest"),
             "event": str(event or ""),
             "members": max(1, int(members or 1)),
-        })
+        }
+        if duration_s is not None:
+            try:
+                details["duration_s"] = round(max(float(duration_s), 0.0), 1)
+            except (TypeError, ValueError):
+                pass
+        self._enqueue("room_event", details)
 
     def track_rpc(self, action: str, mode: str = "") -> None:
         """Coarse Discord Rich Presence engagement (enable/disable/connect).
@@ -357,9 +417,27 @@ class MonitoringSystem:
     def track_theme(self, theme: str) -> None:
         self._enqueue("theme_event", {"theme": str(theme or "")})
 
-    def track_skip(self, kind: str, action: str = "skipped") -> None:
-        """Auto-Skip engagement — OP/ED (or recap) skip actually performed."""
-        self._enqueue("skip_event", {"kind": str(kind or ""), "action": str(action or "")})
+    def track_skip(
+        self,
+        kind: str,
+        action: str = "skipped",
+        accurate: bool = None,
+        delay_seconds: float = None,
+    ) -> None:
+        """Auto-Skip engagement — OP/ED (or recap) skip actually performed.
+
+        ``accurate`` reports whether the skip executed as intended;
+        ``delay_seconds`` is how long after the window opened the skip fired
+        (poll cadence) — together they give the server-side accuracy metrics."""
+        details: Dict[str, Any] = {"kind": str(kind or ""), "action": str(action or "")}
+        if accurate is not None:
+            details["accurate"] = bool(accurate)
+        if delay_seconds is not None:
+            try:
+                details["delay_seconds"] = round(max(float(delay_seconds), 0.0), 2)
+            except (TypeError, ValueError):
+                pass
+        self._enqueue("skip_event", details)
 
     def track_search(self, language: str = "english") -> None:
         """Search counts by catalog language. The query text is intentionally

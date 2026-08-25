@@ -1604,10 +1604,12 @@ class JSApi:
         title = meta.get("title") or self._anime_title(anime_id)
         poster = (meta or {}).get("poster") or ""
 
+        resolve_t0 = time.time()
         try:
             stream = self._resolve_stream(anime_id, ep_num, provider, category, resolution)
         except Exception as exc:
             return {"ok": False, "error": f"Stream resolution failed: {exc}"}
+        resolve_ms = (time.time() - resolve_t0) * 1000.0
 
         url = (stream or {}).get("stream_url")
         if not url:
@@ -1834,6 +1836,7 @@ class JSApi:
                 quality=resolution,
                 watch_start=watch_started,
                 watch_end=time.time(),
+                resolve_ms=resolve_ms,
             )
             monitor.set_activity("idle")
         except Exception:
@@ -2238,6 +2241,13 @@ class JSApi:
             chosen = _run_bounded(_chosen, "gui:chosen")
             if self._is_usable_stream(chosen):
                 return chosen
+            # Telemetry: the chosen provider failed — the auto chain is the
+            # fallback. Fire-and-forget on the analytics worker.
+            try:
+                from .monitoring import monitor
+                monitor.track_provider_fallback(provider, "auto", "chosen provider unusable")
+            except Exception:
+                pass
             fallback = _run_bounded(_auto, "gui:auto:fallback")
             if self._is_usable_stream(fallback):
                 return fallback
@@ -2437,6 +2447,7 @@ class JSApi:
                 monitor.track_watch_together("host", "create", 1)
             except Exception:
                 pass
+            self._wt_started_at = time.time()
             return result
         except Exception as exc:
             return {"ok": False, "error": str(exc)}
@@ -2462,6 +2473,7 @@ class JSApi:
                 monitor.track_watch_together("guest", "join", 1)
             except Exception:
                 pass
+            self._wt_started_at = time.time()
             return {"ok": True, "code": code, "role": "guest"}
         except Exception as exc:
             return {"ok": False, "error": str(exc)}
@@ -2477,7 +2489,9 @@ class JSApi:
                 result = {"ok": False, "error": str(exc)}
             try:
                 from .monitoring import monitor
-                monitor.track_watch_together("host", "end", 1)
+                wt_started = getattr(self, "_wt_started_at", None)
+                duration = (time.time() - wt_started) if wt_started else None
+                monitor.track_watch_together("host", "end", 1, duration_s=duration)
             except Exception:
                 pass
             self._watch_host = None
@@ -2488,10 +2502,13 @@ class JSApi:
                 result = {"ok": False, "error": str(exc)}
             try:
                 from .monitoring import monitor
-                monitor.track_watch_together("guest", "leave", 1)
+                wt_started = getattr(self, "_wt_started_at", None)
+                duration = (time.time() - wt_started) if wt_started else None
+                monitor.track_watch_together("guest", "leave", 1, duration_s=duration)
             except Exception:
                 pass
             self._watch_guest = None
+        self._wt_started_at = None
         try:
             from .discord_rpc import presence as _presence
             _presence.clear_room()
