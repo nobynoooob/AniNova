@@ -300,19 +300,33 @@ def _anilist_browse(genre: str, sort: str, season: str,
     variables: Dict[str, Any] = {
         "page": max(1, int(page)),
         "perPage": max(1, min(50, int(per_page))),
+        # sort MUST be a list of valid MediaSort enums
         "sort": [sort if sort in _BROWSE_SORTS else "TRENDING_DESC"],
     }
-    # All Seasons: season/seasonYear keys are OMITTED entirely (never null or
-    # empty strings) so AniList applies no seasonal filter at all.
-    if genre:
-        variables["genre"] = [genre]
+    # Sanitization contract: absent filter keys are the ONLY way to express
+    # "no filter". Never send null/empty-string/placeholder values — AniList
+    # treats ["All"] as a literal genre and null as an error.
+    if genre and str(genre).strip().lower() != "all":
+        variables["genre"] = [str(genre).strip()]
     if season in ("current", "upcoming"):
         s_name, s_year = _current_season() if season == "current" else _next_season()
         variables["season"] = s_name
         variables["seasonYear"] = s_year
 
     import httpx
+
+    def _log_graphql_failure(status, body_head, why):
+        """Exact error + variables to stdout for backend debugging."""
+        try:
+            print(f"[anilist] GraphQL {why} status={status} "
+                  f"variables={json.dumps(variables)}")
+            if body_head:
+                print(f"[anilist] response head: {str(body_head)[:400]}")
+        except Exception:
+            pass
+
     last_err: Optional[Exception] = None
+    payload = None
     for attempt in range(2):  # 1 automatic retry on HTTP/network failure
         try:
             r = httpx.post(
@@ -322,10 +336,28 @@ def _anilist_browse(genre: str, sort: str, season: str,
                 headers=_ANILIST_HTTP_HEADERS,
             )
             if r.status_code == 200:
-                payload = (r.json().get("data") or {}).get("Page") or {}
+                body = r.json()
+                gql_errors = body.get("errors")
+                if gql_errors:
+                    # HTTP 200 but GraphQL-level failure (validation etc.) —
+                    # previously swallowed silently; now logged verbatim.
+                    msg = "; ".join(str(e.get("message") or e) for e in gql_errors)
+                    _log_graphql_failure(200, msg, "graphql-errors")
+                    raise RuntimeError(f"AniList GraphQL: {msg}")
+                payload = (body.get("data") or {}).get("Page") or {}
                 break
+            # Body head computed defensively: a broken .text must never
+            # reclassify an HTTP failure as a network one.
+            try:
+                body_head = str(r.text)[:400]
+            except Exception:
+                body_head = "<unreadable>"
+            _log_graphql_failure(r.status_code, body_head, "http-error")
             last_err = RuntimeError(f"AniList HTTP {r.status_code}")
+        except RuntimeError:
+            raise  # GraphQL-errors already logged; retrying validation is pointless
         except Exception as exc:
+            _log_graphql_failure("network", "", f"{type(exc).__name__}: {exc}")
             last_err = exc
         if attempt == 0:
             time.sleep(0.5)
