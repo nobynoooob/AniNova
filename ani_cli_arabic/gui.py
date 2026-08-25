@@ -38,6 +38,16 @@ _UI_DIR = Path(__file__).resolve().parent / "ui"
 _INDEX_HTML = _UI_DIR / "index.html"
 
 _ANILIST_GRAPHQL = "https://graphql.anilist.co"
+# Cloudflare in front of AniList drops non-browser User-Agents (python-httpx,
+# app-id strings) with challenge/4xx responses — every request to the GraphQL
+# endpoint MUST present a standard desktop-browser UA.
+_BROWSER_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+               "(KHTML, like Gecko) Chrome/126.0 Safari/537.36")
+_ANILIST_HTTP_HEADERS = {
+    "User-Agent": _BROWSER_UA,
+    "Content-Type": "application/json",
+    "Accept": "application/json",
+}
 _PROVIDER_TIMEOUT = 3.5
 _CHOSEN_PROVIDER_TIMEOUT = 25.0
 _MAX_SEARCH_CACHE = 128
@@ -292,6 +302,8 @@ def _anilist_browse(genre: str, sort: str, season: str,
         "perPage": max(1, min(50, int(per_page))),
         "sort": [sort if sort in _BROWSE_SORTS else "TRENDING_DESC"],
     }
+    # All Seasons: season/seasonYear keys are OMITTED entirely (never null or
+    # empty strings) so AniList applies no seasonal filter at all.
     if genre:
         variables["genre"] = [genre]
     if season in ("current", "upcoming"):
@@ -300,15 +312,26 @@ def _anilist_browse(genre: str, sort: str, season: str,
         variables["seasonYear"] = s_year
 
     import httpx
-    r = httpx.post(
-        _ANILIST_GRAPHQL,
-        json={"query": _BROWSE_GRAPHQL, "variables": variables},
-        timeout=12.0,
-        headers={"User-Agent": f"ani-cli-ar/{__version__}"},
-    )
-    if r.status_code != 200:
-        raise RuntimeError(f"AniList HTTP {r.status_code}")
-    payload = (r.json().get("data") or {}).get("Page") or {}
+    last_err: Optional[Exception] = None
+    for attempt in range(2):  # 1 automatic retry on HTTP/network failure
+        try:
+            r = httpx.post(
+                _ANILIST_GRAPHQL,
+                json={"query": _BROWSE_GRAPHQL, "variables": variables},
+                timeout=12.0,
+                headers=_ANILIST_HTTP_HEADERS,
+            )
+            if r.status_code == 200:
+                payload = (r.json().get("data") or {}).get("Page") or {}
+                break
+            last_err = RuntimeError(f"AniList HTTP {r.status_code}")
+        except Exception as exc:
+            last_err = exc
+        if attempt == 0:
+            time.sleep(0.5)
+    else:
+        raise RuntimeError(f"{type(last_err).__name__}: {last_err}"
+                           if last_err else "AniList request failed")
     items = []
     for m in payload.get("media") or []:
         if not m.get("id"):
@@ -362,6 +385,7 @@ def _anilist_media(anime_id: str) -> Dict[str, Any]:
                 "variables": {"id": int(anime_id)},
             },
             timeout=8.0,
+            headers=_ANILIST_HTTP_HEADERS,
         )
         if r.status_code != 200:
             return {}
@@ -450,6 +474,7 @@ def _anilist_search(query: str, limit: int = 30) -> List[Dict[str, Any]]:
                 "variables": {"search": query, "page": 1, "perPage": int(limit)},
             },
             timeout=8.0,
+            headers=_ANILIST_HTTP_HEADERS,
         )
         if r.status_code != 200:
             return []
