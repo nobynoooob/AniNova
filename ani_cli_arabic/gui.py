@@ -418,6 +418,7 @@ def _anilist_browse(genre: str, sort: str, season: str,
         if not m.get("id"):
             continue
         title_obj = m.get("title") or {}
+        genres = list(m.get("genres") or [])
         items.append({
             "id": str(m["id"]),
             "title": title_obj.get("english") or title_obj.get("romaji") or "",
@@ -425,8 +426,21 @@ def _anilist_browse(genre: str, sort: str, season: str,
             "provider": "browse",
             "format": m.get("format") or "",
             "score": (m.get("averageScore") / 10.0) if m.get("averageScore") else None,
-            "genres": list(m.get("genres") or []),
+            "genres": genres,
         })
+    # Genre-focus re-rank: when filtering by a genre, shows where that genre
+    # DEFINES them (first two genre slots) come before shows that merely have
+    # the tag buried deep (Naruto's Comedy is its 4th genre; Chainsaw Man's
+    # Horror is its 3rd). Stable within the requested sort, applied per page.
+    if genre:
+        g = str(genre).strip().lower()
+        def _focus_key(item):
+            try:
+                idx = [x.lower() for x in item["genres"]].index(g)
+            except ValueError:
+                idx = 99
+            return 0 if idx <= 1 else 1
+        items.sort(key=_focus_key)
     info = payload.get("pageInfo") or {}
     return {
         "items": items,
@@ -435,16 +449,20 @@ def _anilist_browse(genre: str, sort: str, season: str,
     }
 
 
-def _anilist_browse_cached(genre, sort, season, page, per_page=_BROWSE_PER_PAGE):
+def _anilist_browse_cached(genre, sort, season, page, per_page=_BROWSE_PER_PAGE,
+                           force=False):
     """Session-memory cache wrapper around :func:`_anilist_browse`.
 
     Switching genres back and forth re-serves pages instantly without touching
-    the API; failures are NOT cached so a transient outage retries on demand."""
+    the API; failures are NOT cached so a transient outage retries on demand.
+    ``force=True`` skips the cache read (used to self-heal suspicious empty
+    responses) while still refreshing the cached entry."""
     key = _browse_cache_key(genre, sort, season, page, per_page)
-    with _BROWSE_CACHE_LOCK:
-        hit = _BROWSE_CACHE.get(key)
-    if hit is not None:
-        return hit
+    if not force:
+        with _BROWSE_CACHE_LOCK:
+            hit = _BROWSE_CACHE.get(key)
+        if hit is not None:
+            return hit
     result = _anilist_browse(genre, sort, season, page, per_page)
     with _BROWSE_CACHE_LOCK:
         if len(_BROWSE_CACHE) >= _BROWSE_CACHE_MAX:
@@ -2252,6 +2270,13 @@ class JSApi:
         try:
             result = _anilist_browse_cached(genre, sort, season,
                                             int(page or 1), int(per_page))
+            # Self-heal: a broad genre query returning ZERO items on page 1 is
+            # almost certainly a transient AniList empty-response (Romance bug
+            # report) — bypass the cache and retry once before giving up.
+            if genre and int(page or 1) == 1 and not result.get("items"):
+                result = _anilist_browse_cached(genre, sort, season,
+                                                int(page or 1), int(per_page),
+                                                force=True)
             return {"ok": True, **result}
         except Exception as exc:
             # Full diagnostics to stdout: raw exception type + complete stack

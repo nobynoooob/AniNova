@@ -3792,6 +3792,7 @@
   let bHasNext = false;
   let bLoadedOnce = false;
   let bLoading = false;
+  let bSortTouched = false;   // user manually picked a sort -> never override
 
   function buildGenreChips() {
     const wrap = $("#genreChips");
@@ -3809,6 +3810,14 @@
         bGenre = c.v;
         wrap.querySelectorAll(".g-chip").forEach(x => x.classList.remove("active"));
         btn.classList.add("active");
+        // Relevance defaults: a genre chip means "best of THIS genre" ->
+        // Top Rated; the All chip means discovery -> Trending. A manually
+        // chosen sort always wins.
+        if (!bSortTouched) {
+          bSort = c.v ? "SCORE_DESC" : "TRENDING_DESC";
+          const sel = $("#browseSort");
+          if (sel) sel.value = bSort;
+        }
         loadBrowse(true);
       });
       wrap.appendChild(btn);
@@ -3888,6 +3897,7 @@
 
   $("#browseSort").addEventListener("change", (e) => {
     bSort = e.target.value;
+    bSortTouched = true;
     loadBrowse(true);
   });
   $("#browseSeason").addEventListener("change", (e) => {
