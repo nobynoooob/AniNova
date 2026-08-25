@@ -1790,7 +1790,7 @@
           <h1 id="detTitle"></h1>
           <div class="alt-titles" id="detAltTitles"></div>
           <div class="synopsis">
-            <div class="text" id="detSynopsis"></div>
+            <div class="text anime-synopsis" id="detSynopsis" data-anime-id=""></div>
             <button class="synopsis-toggle" id="synToggle" data-i18n="details.show_more">Show more</button>
           </div>
         </div>
@@ -4083,6 +4083,8 @@
     const title = details.title || current.title;
     const displayTitle = localizeAnimeTitle(title, details);
     $("#detTitle").textContent = displayTitle;
+    const synEl = $("#detSynopsis");
+    if (synEl) synEl.dataset.animeId = String(current.id || "");
     const typeKey = details.type ? "badge." + String(details.type).toLowerCase() : null;
     const typeText = (typeKey && t(typeKey) !== typeKey) ? t(typeKey) : (details.type || "");
     $("#crumbs").textContent = `${typeText} · ${details.premiered || ""}`

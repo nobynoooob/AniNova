@@ -2005,7 +2005,7 @@ class JSApi:
     # pre-roll, watch together / global hotkeys, downloads, privacy)
     # ------------------------------------------------------------------
     def translate_synopsis(self, title: str, text: str) -> Dict:
-        """Dynamic Arabic translation for synopses (Watch Time/i18n engine).
+        """Dynamic Arabic translation for synopses (i18n engine).
 
         Called from the UI only when AR mode is active and no curated/API
         Arabic description exists. Privacy-gated by the ``dynamic_translation``
@@ -2016,22 +2016,39 @@ class JSApi:
         Returns ``{"ok": bool, "arabic": str|None}``."""
         out = {"ok": False, "arabic": None}
         text = str(text or "").strip()
+        title = str(title or "").strip()
         if not text:
             return out
+        enabled = True
         try:
             from .settings import SettingsManager
-            if not bool(SettingsManager().get("dynamic_translation", True)):
-                return out
+            enabled = bool(SettingsManager().get("dynamic_translation", True))
         except Exception:
             pass  # settings unavailable -> fail open (feature stays usable)
+        if not enabled:
+            print("[translator] skipped (dynamic_translation=off): "
+                  f"{title[:40]}", file=sys.stderr)
+            return out
         try:
             from .translator import translate_to_arabic, get_cached_translation
             cached = get_cached_translation(text)
-            ar = cached if cached else translate_to_arabic(text)
+            if cached:
+                print(f"[translator] bridge cache-hit: {title[:40]}",
+                      file=sys.stderr)
+                ar = cached
+            else:
+                print(f"[translator] bridge request: {title[:40]} "
+                      f"({len(text)} chars)", file=sys.stderr)
+                ar = translate_to_arabic(text)
             if ar:
                 out.update(ok=True, arabic=ar)
-        except Exception:
-            pass
+                print(f"[translator] bridge OK: {title[:40]}", file=sys.stderr)
+            else:
+                print(f"[translator] bridge FAILED (all providers): "
+                      f"{title[:40]}", file=sys.stderr)
+        except Exception as exc:
+            print(f"[translator] bridge error: {type(exc).__name__}: {exc}",
+                  file=sys.stderr)
         return out
 
     def get_settings(self) -> Dict:
