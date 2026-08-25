@@ -77,4 +77,7 @@ class SettingsManager:
             "global_skip_seconds": 10,
             "auto_skip_enabled": True,
             "auto_skip_osd": True,
+            # Watch Together protocol v3 safeguards
+            "wt_strict_sync": False,       # opt-in: pause when a guest buffers
+            "wt_countdown_seconds": 3,     # simultaneous-start countdown (0=off)
         }

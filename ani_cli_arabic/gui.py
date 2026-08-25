@@ -103,16 +103,19 @@ _SETTING_ALL_KEYS = (
     "global_skip_seconds",
     "auto_skip_enabled",
     "auto_skip_osd",
+    "wt_strict_sync",
+    "wt_countdown_seconds",
 )
 _SETTING_BOOL_KEYS = frozenset({
     "auto_next", "discord_rpc", "show_rpc_room_code", "analytics", "mpv_custom_keys",
     "preroll_enabled", "global_hotkeys_enabled", "auto_skip_enabled",
-    "auto_skip_osd",
+    "auto_skip_osd", "wt_strict_sync",
 })
-_SETTING_INT_KEYS = frozenset({"preroll_seconds", "global_skip_seconds"})
+_SETTING_INT_KEYS = frozenset({"preroll_seconds", "global_skip_seconds", "wt_countdown_seconds"})
 _SETTING_INT_RANGES = {
     "preroll_seconds": (1, 120),
     "global_skip_seconds": (1, 300),
+    "wt_countdown_seconds": (0, 10),
 }
 _SETTING_QUALITY_OPTIONS = ("auto", "1080p", "720p", "480p", "360p", "best")
 _SETTING_THEME_NAMES = (
@@ -1656,6 +1659,7 @@ class JSApi:
         ipc_socket = None
         rc_port = None
         session = None
+        start_paused_flag = False
         if host is not None and getattr(host, "is_active", False):
             player_choice = getattr(host, "player_kind", "mpv") or "mpv"
             if player_choice == "vlc":
@@ -1669,6 +1673,9 @@ class JSApi:
                     url=url, headers=headers,
                 )
                 session = getattr(host, "_session", 0) or 0
+                # Simultaneous-start countdown: launch paused; the room-wide
+                # PLAY anchor fires when the countdown elapses.
+                start_paused_flag = bool(host.consume_start_pause_request())
             except Exception:
                 pass
             # Seamless next/prev: kill the previous host player so the room's
@@ -1819,6 +1826,7 @@ class JSApi:
                 progress_cb=_progress_cb,
                 resolution=resolution,
                 auto_skip=auto_skip,
+                start_paused=start_paused_flag,
             )
         except Exception as exc:
             feed_stop.set()

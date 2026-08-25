@@ -1975,6 +1975,22 @@
           <div class="set-section-title" data-i18n="settings.wt_hotkeys">Watch Together &amp; Hotkeys</div>
           <div class="set-row">
             <div class="set-label">
+              <div class="set-name" data-i18n="settings.wt_strict_sync">Strict sync</div>
+              <div class="set-desc" data-i18n="settings.wt_strict_sync_desc">As a host, pause playback automatically when a room member keeps buffering for over 5 seconds.</div>
+            </div>
+            <div class="set-field">
+              <label class="switch"><input type="checkbox" id="setStrictSync"><span class="slider"></span></label>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-label">
+              <div class="set-name" data-i18n="settings.wt_countdown">Start countdown</div>
+              <div class="set-desc" data-i18n="settings.wt_countdown_desc">Seconds everyone buffers before an episode starts together (0 = off).</div>
+            </div>
+            <div class="set-field"><input type="number" id="setWtCountdown" min="0" max="10" step="1"></div>
+          </div>
+          <div class="set-row">
+            <div class="set-label">
               <div class="set-name" data-i18n="settings.system_hotkeys">System-wide hotkeys</div>
               <div class="set-desc" data-i18n="settings.system_hotkeys_desc">Global play/pause &amp; seek while hosting a room.</div>
             </div>
@@ -2227,6 +2243,10 @@
       "settings.auto_skip_osd": "Skip on-screen message",
       "settings.auto_skip_osd_desc": "Show a small player notification when an intro/outro is skipped.",
       "settings.wt_hotkeys": "Watch Together & Hotkeys",
+      "settings.wt_strict_sync": "Strict sync",
+      "settings.wt_strict_sync_desc": "As a host, pause playback automatically when a room member keeps buffering for over 5 seconds.",
+      "settings.wt_countdown": "Start countdown",
+      "settings.wt_countdown_desc": "Seconds everyone buffers before an episode starts together (0 = off).",
       "settings.system_hotkeys": "System-wide hotkeys",
       "settings.system_hotkeys_desc": "Global play/pause & seek while hosting a room.",
       "settings.hotkey_step": "Hotkey seek step",
@@ -2398,6 +2418,10 @@
       "settings.auto_skip_osd": "رسالة التخطي",
       "settings.auto_skip_osd_desc": "عرض إشعار صغير عند تخطي المقدمة أو النهاية.",
       "settings.wt_hotkeys": "شاهد معًا واختصارات",
+      "settings.wt_strict_sync": "مزامنة صارمة",
+      "settings.wt_strict_sync_desc": "كمضيف، أوقف التشغيل تلقائيًا إذا استمر أحد الأعضاء في التخزين المؤقت أكثر من 5 ثوانٍ.",
+      "settings.wt_countdown": "عد تنازلي للبدء",
+      "settings.wt_countdown_desc": "ثواني انتظار الجميع للتخزين المؤقت قبل أن تبدأ الحلقة معًا (0 = إيقاف).",
       "settings.system_hotkeys": "مفاتيح اختصار شاملة",
       "settings.system_hotkeys_desc": "تشغيل/إيقاف وتقديم/ترجيع عالمي عند استضافة غرفة.",
       "settings.hotkey_step": "خطوات التقديم",
@@ -2949,6 +2973,8 @@
     { id: "setPrerollSeconds", key: "preroll_seconds" },
     { id: "setHotkeysEnabled", key: "global_hotkeys_enabled", bool: true },
     { id: "setSkipSeconds", key: "global_skip_seconds" },
+    { id: "setStrictSync", key: "wt_strict_sync", bool: true },
+    { id: "setWtCountdown", key: "wt_countdown_seconds" },
     { id: "setHotkeyPlayPause", key: "global_hotkey_play_pause" },
     { id: "setHotkeySeekFwd", key: "global_hotkey_seek_forward" },
     { id: "setHotkeySeekBack", key: "global_hotkey_seek_backward" },

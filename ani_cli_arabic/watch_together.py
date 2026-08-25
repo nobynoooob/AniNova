@@ -46,7 +46,7 @@ from .player import PlayerManager
 
 ROOM_CODE_LEN = 6
 MAX_MEMBERS = 8
-PROTOCOL_VERSION = 2
+PROTOCOL_VERSION = 3
 GLOBAL_SKIP_SECONDS = 10.0
 # Fast-cadence sync: a 1s heartbeat + 250ms poll loop means drift is detected
 # and corrected ~3x sooner than before, keeping guests inside the speed-sync
@@ -59,6 +59,20 @@ SEEK_FORWARD_TOLERANCE = 8.0
 POLL_INTERVAL = 0.25
 RECONNECT_TIMEOUT = 30.0
 SEEK_COOLDOWN = 2.0
+# --- Anchor-based sync (protocol v3) ---
+# The host publishes an ANCHOR {pos, t0, playing, epoch} on every discrete
+# transition (load/play/pause/seek). Between anchors each guest evaluates
+#   target = pos + ((now_guest - clock_offset) - t0)     [while playing]
+# locally every evaluation tick, so drift no longer accumulates between
+# periodic snapshots — it only reflects playback-rate mismatch (~zero).
+# Heartbeats continue in parallel as self-heal snapshots + clock-offset
+# sample sources, keeping pre-v3 peers fully compatible.
+ANCHOR_EVAL_INTERVAL = 0.5    # guest-side local target re-evaluation cadence
+# --- Episode-load countdown (simultaneous start) ---
+WT_COUNTDOWN_DEFAULT = 3      # seconds; 0 disables. Settings: wt_countdown_seconds
+# --- Strict sync (opt-in host safeguard) ---
+STRICT_BUFFER_LIMIT = 5.0     # guest buffering seconds before the host pauses
+STRICT_POLL_INTERVAL = 1.0
 # --- Adaptive speed sync (3-zone) ---
 SYNC_DEADBAND = 0.2           # |drift| <= this: play at 1.0x
 SYNC_SPEED_BAND = 2.5         # |drift| > this: hard seek instead of speed tweak
@@ -86,6 +100,7 @@ EV_PLAY = "PLAY"
 EV_PAUSE = "PAUSE"
 EV_SEEK = "SEEK"
 EV_HEARTBEAT = "HEARTBEAT"
+EV_ANCHOR = "ANCHOR"
 EV_JOIN = "JOIN"
 EV_LEAVE = "LEAVE"
 EV_STATE = "STATE"
@@ -274,7 +289,7 @@ class SupabaseRealtime:
                     pass
             return handler
 
-        for evt in (EV_LOAD, EV_PLAY, EV_PAUSE, EV_SEEK, EV_HEARTBEAT, EV_JOIN, EV_LEAVE, EV_STATE, EV_MEMBERS, EV_STATUS, EV_KICK, EV_CONTROL, EV_TRANSFER, EV_STOP):
+        for evt in (EV_LOAD, EV_PLAY, EV_PAUSE, EV_SEEK, EV_HEARTBEAT, EV_ANCHOR, EV_JOIN, EV_LEAVE, EV_STATE, EV_MEMBERS, EV_STATUS, EV_KICK, EV_CONTROL, EV_TRANSFER, EV_STOP):
             try:
                 channel.on_broadcast(event=evt, callback=make_handler())
             except Exception:
@@ -930,6 +945,17 @@ class WatchHost:
         self._monitor_time: Optional[float] = None
         self._monitor_pause: Optional[bool] = None
         self._monitor_ts: float = 0.0
+        # --- Protocol v3 anchor state (guarded by _sync_lock) ---
+        self._anchor: Dict[str, Any] = {
+            "pos": 0.0, "t0": time.time(), "playing": False, "epoch": 0,
+        }
+        # --- Simultaneous-start countdown ---
+        self._pending_start_pause = False
+        self._countdown_timer: Optional[threading.Timer] = None
+        # --- Strict-sync safeguard state ---
+        self._strict_thread: Optional[threading.Thread] = None
+        self._buffering_since: Dict[str, float] = {}
+        self._strict_paused_for: Optional[str] = None
         self.username = _os_username()
         self.members: Dict[str, str] = {self.username: ROLE_HOST}
         self._member_status: Dict[str, dict] = {}
@@ -974,6 +1000,147 @@ class WatchHost:
             "host": self.username,
         }
         self._broadcast(EV_MEMBERS, payload)
+
+    # ------------------------------------------------------------------
+    # Protocol v3: anchor publication (Host-is-King)
+    # ------------------------------------------------------------------
+    def _publish_anchor(self, pos: Optional[float], playing: bool,
+                        epoch: Optional[int] = None):
+        """Broadcast an ANCHOR: the authoritative (position, host-clock,
+        playing) triple from which every guest extrapolates locally.
+
+        Called on every discrete transition — load, play, pause, seek,
+        auto-skip — never on a timer. ``pos``/``playing`` are captured BEFORE
+        calling when the caller needed an IPC read; this method only stamps
+        t0 and publishes."""
+        if not self._active:
+            return
+        try:
+            pos_f = float(pos if pos is not None else 0.0)
+        except (TypeError, ValueError):
+            pos_f = 0.0
+        with self._sync_lock:
+            self._anchor = {
+                "pos": max(0.0, pos_f),
+                "t0": time.time(),
+                "playing": bool(playing),
+                "epoch": int(self._epoch if epoch is None else epoch),
+            }
+            payload = dict(self._anchor)
+        payload["sender"] = SENDER_HOST
+        self._broadcast(EV_ANCHOR, payload)
+
+    def _current_anchor_pos(self) -> float:
+        """Latest known media position without touching IPC."""
+        with self._sync_lock:
+            return float(self._anchor.get("pos") or 0.0)
+
+    # ------------------------------------------------------------------
+    # Simultaneous-start countdown (host side)
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _countdown_seconds() -> int:
+        try:
+            from .settings import SettingsManager
+            v = int(SettingsManager().get("wt_countdown_seconds",
+                                          WT_COUNTDOWN_DEFAULT))
+        except Exception:
+            v = WT_COUNTDOWN_DEFAULT
+        return max(0, min(10, v))
+
+    def should_start_paused(self) -> bool:
+        """True when the just-loaded episode must launch PAUSED so every room
+        member can buffer through the countdown; a timer unpauses everyone at
+        the same instant. Consumed by the GUI right before player launch."""
+        return self._pending_start_pause
+
+    def consume_start_pause_request(self) -> bool:
+        """One-shot GUI API wrapper around :meth:`should_start_paused` that
+        also clears the pending flag (the countdown timer owns the unpause)."""
+        return self._consume_start_pause()
+
+    def _consume_start_pause(self) -> bool:
+        val = self._pending_start_pause
+        self._pending_start_pause = False
+        return val
+
+    def _schedule_countdown_play(self, seconds: int):
+        """Unpause the host player after ``seconds``, which the sync loop
+        detects and broadcasts as PLAY + fresh anchor — the room-wide GO."""
+        if self._countdown_timer is not None:
+            try:
+                self._countdown_timer.cancel()
+            except Exception:
+                pass
+        def _go():
+            self._pending_start_pause = False
+            try:
+                if self._ipc.connected:
+                    paused = self._ipc.get_pause()
+                    if paused is not None and paused:
+                        self._ipc.set_pause(False)
+                        with self._sync_lock:
+                            self._last_broadcast_pause = False
+                        pos = self._ipc.get_time_pos()
+                        self._publish_anchor(pos, True)
+                        self._osd("Room started — enjoy!")
+            except Exception:
+                pass
+        self._countdown_timer = threading.Timer(float(seconds), _go)
+        self._countdown_timer.daemon = True
+        self._countdown_timer.start()
+
+    # ------------------------------------------------------------------
+    # Strict sync safeguard (opt-in): pause the room while a guest buffers
+    # ------------------------------------------------------------------
+    def _strict_loop(self):
+        while not self._stop.is_set() and self._active:
+            try:
+                enabled = False
+                try:
+                    from .settings import SettingsManager
+                    enabled = bool(SettingsManager().get("wt_strict_sync", False))
+                except Exception:
+                    enabled = False
+                now = time.time()
+                freshest_cutoff = HEARTBEAT_INTERVAL * 4
+                buffering_now = []
+                with self._sync_lock:
+                    statuses = list(self._member_status.items())
+                for name, st in statuses:
+                    if name not in self.members:
+                        continue
+                    if now - st.get("last_seen", 0) > freshest_cutoff:
+                        continue
+                    if st.get("buffering"):
+                        since = self._buffering_since.setdefault(name, now)
+                        if now - since >= STRICT_BUFFER_LIMIT:
+                            buffering_now.append(name)
+                    else:
+                        self._buffering_since.pop(name, None)
+                for name in list(self._buffering_since.keys()):
+                    if not any(n == name for n, _ in statuses):
+                        self._buffering_since.pop(name, None)
+                if enabled and buffering_now and self._ipc.connected:
+                    paused = self._ipc.get_pause()
+                    if paused is False:   # playing -> hold the room
+                        culprit = sorted(buffering_now)[0]
+                        self._ipc.set_pause(True)
+                        with self._sync_lock:
+                            self._last_broadcast_pause = True
+                        pos = self._ipc.get_time_pos()
+                        self._broadcast(EV_PAUSE, {})
+                        self._publish_anchor(pos, False)
+                        self._strict_paused_for = culprit
+                        self._osd(f"Paused - waiting for {culprit} to buffer")
+                elif self._strict_paused_for and not buffering_now:
+                    # Everyone recovered; stay paused until the HOST presses
+                    # play (predictable, no ping-pong). Clear the marker so a
+                    # future buffering stall can pause again.
+                    self._strict_paused_for = None
+            except Exception:
+                pass
+            time.sleep(STRICT_POLL_INTERVAL)
 
     def _on_message(self, message: dict):
         """Host is the single authority: it ignores all incoming playback
@@ -1141,7 +1308,23 @@ class WatchHost:
             "epoch": self._epoch,
             "resume_at": float(resume_at or 0.0),
         }
-        self._broadcast(EV_LOAD, self._current)
+        payload = dict(self._current)
+        # Simultaneous-start countdown (active rooms only): announce start_at
+        # so guests launch PAUSED early, buffer during the window, then the
+        # whole room hits play at the same instant.
+        cd = self._countdown_seconds() if self._active else 0
+        countdown_on = cd > 0
+        if countdown_on:
+            self._pending_start_pause = True
+            payload["start_at"] = time.time() + float(cd)
+            payload["countdown"] = int(cd)
+        self._broadcast(EV_LOAD, payload)
+        if countdown_on:
+            self._osd(f"Starting together in {cd}s...")
+            self._publish_anchor(float(resume_at or 0.0), False)
+            self._schedule_countdown_play(cd)
+        else:
+            self._publish_anchor(float(resume_at or 0.0), True)
         self._osd(f"Now playing: {title} - Ep {episode_num}")
         self._stop.clear()
         if self._sync_thread is None or not self._sync_thread.is_alive():
@@ -1149,6 +1332,11 @@ class WatchHost:
                 target=self._sync_loop, daemon=True
             )
             self._sync_thread.start()
+        if self._strict_thread is None or not self._strict_thread.is_alive():
+            self._strict_thread = threading.Thread(
+                target=self._strict_loop, daemon=True
+            )
+            self._strict_thread.start()
 
     def notify_stop(self, session: Optional[int] = None):
         """End the current playback session.
@@ -1191,6 +1379,8 @@ class WatchHost:
                 self._broadcast(EV_PAUSE if paused else EV_PLAY, {})
                 with self._sync_lock:
                     self._last_broadcast_pause = paused
+                pos_now = self._ipc.get_time_pos()
+                self._publish_anchor(pos_now, not paused)
                 self._osd("Paused by host (global hotkey)" if paused
                           else "Resumed by host (global hotkey)")
                 return {"ok": True, "action": action, "paused": paused}
@@ -1206,6 +1396,8 @@ class WatchHost:
                 self._broadcast(EV_SEEK, {"time": target})
                 with self._sync_lock:
                     self._last_broadcast_seek_time = target
+                paused_now = self._ipc.get_pause()
+                self._publish_anchor(target, paused_now is False)
                 self._osd(
                     f"Skip {'forward' if action == 'seek_forward' else 'backward'} "
                     f"to {target:.0f}s"
@@ -1235,6 +1427,8 @@ class WatchHost:
             with self._sync_lock:
                 self._last_broadcast_seek_time = target
                 self._last_polled_time = target
+            paused_now = self._ipc.get_pause() if self._ipc.connected else None
+            self._publish_anchor(target, paused_now is False)
             if label == "ed":
                 self._osd(f"Skipped Ending — {int(target)}s")
             else:
@@ -1298,6 +1492,7 @@ class WatchHost:
                 self._osd("Paused by host" if paused else "Resumed by host")
                 with self._sync_lock:
                     self._last_broadcast_pause = paused
+                self._publish_anchor(time_pos, paused is False)
             with self._sync_lock:
                 last_polled = self._last_polled_time
             if time_pos is not None and last_polled is not None:
@@ -1312,6 +1507,7 @@ class WatchHost:
                         self._osd(f"Seeking to {time_pos:.0f}s")
                         with self._sync_lock:
                             self._last_broadcast_seek_time = time_pos
+                        self._publish_anchor(time_pos, paused is False)
             if time_pos is not None:
                 with self._sync_lock:
                     self._last_polled_time = time_pos
@@ -1350,6 +1546,13 @@ class WatchHost:
         self._stopped = True
         self.notify_stop()
         self._active = False
+        if self._countdown_timer is not None:
+            try:
+                self._countdown_timer.cancel()
+            except Exception:
+                pass
+            self._countdown_timer = None
+        self._pending_start_pause = False
         if self._channel is not None:
             try:
                 self._channel.unsubscribe()
@@ -1405,6 +1608,9 @@ class WatchGuest:
         # --- Mini-NTP clock-offset state ---
         self._clock_samples: list = []      # raw (recv - sent) window
         self._clock_offset: Optional[float] = None
+        # --- Protocol v3 anchor state ---
+        self._anchor: Optional[Dict[str, Any]] = None
+        self._proto_notified_ts = 0.0
         atexit.register(self._atexit_cleanup)
 
     @property
@@ -1433,7 +1639,8 @@ class WatchGuest:
             return
         try:
             self._channel.send_broadcast(
-                EV_JOIN, {"sender": "guest", "username": self.username}
+                EV_JOIN, {"sender": "guest", "username": self.username,
+                          "proto": PROTOCOL_VERSION}
             )
         except Exception:
             pass
@@ -1442,6 +1649,7 @@ class WatchGuest:
         last_ping = 0.0
         last_status = 0.0
         last_enforce = 0.0
+        last_eval = 0.0
         while not self._stop.is_set() and self._active:
             now = time.time()
             if now - last_ping >= HEARTBEAT_INTERVAL:
@@ -1456,6 +1664,14 @@ class WatchGuest:
             if now - last_enforce >= 1.0:
                 self._enforce_authority()
                 last_enforce = now
+            # Protocol v3: continuous local evaluation against the latest
+            # anchor — the sub-second precision engine (no network involved).
+            if now - last_eval >= ANCHOR_EVAL_INTERVAL:
+                try:
+                    self._evaluate_sync()
+                except Exception:
+                    pass
+                last_eval = now
             time.sleep(POLL_INTERVAL)
 
     def _report_status(self):
@@ -1468,7 +1684,10 @@ class WatchGuest:
         buffering = bool(self._player_proc is not None and not self._ipc.connected)
         if self._ipc.connected:
             guest_time = self._ipc.get_time_pos()
-            if guest_time is not None and self._last_host_time is not None:
+            target = self._anchor_target_now()
+            if guest_time is not None and target is not None:
+                drift = float(target) - float(guest_time)
+            elif guest_time is not None and self._last_host_time is not None:
                 drift = float(self._last_host_time) - float(guest_time)
             playing = self._ipc.get_pause()
             if playing is not None:
@@ -1483,6 +1702,16 @@ class WatchGuest:
             })
         except Exception:
             pass
+
+    def _anchor_target_now(self) -> Optional[float]:
+        """Where the host should be right now, per the latest anchor."""
+        anchor = self._anchor
+        if not anchor or not anchor.get("playing"):
+            return None
+        now = time.time()
+        offset = self._clock_offset
+        host_clock_now = (now - offset) if offset is not None else now
+        return float(anchor["pos"]) + max(0.0, host_clock_now - float(anchor["t0"]))
 
     def _ensure_ipc(self) -> bool:
         """Reconnect a dropped IPC socket, retrying for up to
@@ -1513,6 +1742,19 @@ class WatchGuest:
             if seq <= self._last_seq:
                 return
             self._last_seq = seq
+        # Protocol handshake: notify once when the host runs a different app
+        # generation so mismatched rooms degrade gracefully instead of silently.
+        proto = payload.get("proto")
+        if isinstance(proto, (int, float)):
+            p = int(proto)
+            if p != PROTOCOL_VERSION:
+                now = time.time()
+                if now - getattr(self, "_proto_notified_ts", 0.0) > 30.0:
+                    self._proto_notified_ts = now
+                    if p < PROTOCOL_VERSION:
+                        self._osd("Host runs an older app version - compatibility mode")
+                    else:
+                        self._osd("Host runs a newer app version - consider updating")
         if event == EV_LOAD:
             self._handle_load(payload)
         elif event == EV_PLAY:
@@ -1521,6 +1763,8 @@ class WatchGuest:
             self._apply_pause(True)
         elif event == EV_SEEK:
             self._apply_seek(payload.get("time"))
+        elif event == EV_ANCHOR:
+            self._handle_anchor(payload)
         elif event == EV_HEARTBEAT:
             self._handle_heartbeat(payload)
         elif event == EV_STATE:
@@ -1567,6 +1811,7 @@ class WatchGuest:
         with self._state_lock:
             self._pending = {}
         self._host_cmd = {}
+        self._anchor = None
         self._last_epoch = max(self._last_epoch, int(payload.get("epoch") or 0))
         threading.Thread(target=self._stop_playback, daemon=True).start()
         self._osd("Host stopped playback")
@@ -1878,6 +2123,10 @@ class WatchGuest:
             )
         except Exception:
             pass
+        # Simultaneous-start countdown: when the LOAD carried start_at, launch
+        # PAUSED so we buffer through the window; the host's PLAY anchor (or
+        # PLAY event) unpauses everyone at the same instant.
+        start_paused = bool((self._watch_meta or {}).get("start_at"))
         if self.player_kind == "vlc":
             vlc_path = self._player.get_available_players().get("VLC") or "vlc"
             args = self._player.build_vlc_args(
@@ -1886,6 +2135,7 @@ class WatchGuest:
                 headers=headers,
                 rc_port=self.rc_port,
                 lock_controls=not self._controls_allowed,
+                start_paused=start_paused,
             )
         else:
             mpv_path = self._player.get_mpv_path()
@@ -1895,6 +2145,7 @@ class WatchGuest:
                 headers=headers,
                 ipc_socket=self.socket_path,
                 lock_controls=not self._controls_allowed,
+                start_paused=start_paused,
             )
         if self._player_proc is not None:
             try:
@@ -2035,8 +2286,66 @@ class WatchGuest:
         target_time = _target_media_time(
             host_time, sent, now, bool(playing is not False), self._clock_offset
         )
+        self._apply_sync_decision(target_time, guest_time)
 
-        # --- 4) EWMA-smooth the drift so network spikes don't trigger seeks ---
+    def _handle_anchor(self, payload: dict):
+        """Protocol v3: store the host's authoritative (pos, t0, playing)
+        anchor. Guests extrapolate target time locally from this point on —
+        drift between anchors reflects only playback-rate mismatch (~zero),
+        which is what pushes precision from ~1s down to tens of ms."""
+        epoch = payload.get("epoch")
+        if isinstance(epoch, (int, float)):
+            if int(epoch) < self._last_epoch:
+                return
+            self._last_epoch = int(epoch)
+        try:
+            pos = float(payload.get("pos") or 0.0)
+            t0 = float(payload.get("t0") or 0.0)
+        except (TypeError, ValueError):
+            return
+        playing = bool(payload.get("playing"))
+        self._anchor = {
+            "pos": max(0.0, pos),
+            "t0": t0 if t0 > 0 else time.time(),
+            "playing": playing,
+            "recv": time.time(),
+        }
+        if not self._ipc.connected:
+            return
+        if not playing:
+            # Anchor says the room is holding still: mirror immediately.
+            threading.Thread(
+                target=lambda: self._ipc.set_pause(True), daemon=True
+            ).start()
+            return
+        # Playing anchor: evaluate right away for a snappy catch-up instead of
+        # waiting for the next evaluation tick.
+        self._evaluate_sync()
+
+    def _evaluate_sync(self):
+        """Anchor-driven local evaluation (protocol v3 core loop).
+
+        Computes where the HOST is right now purely from the latest anchor +
+        clock offset — no network round-trip involved — then applies the same
+        deadband/speed/hard-seek zones as heartbeat sync. Skipped entirely when
+        the host granted this guest manual control."""
+        anchor = self._anchor
+        if not anchor or not self._ipc.connected or self._controls_allowed:
+            return
+        if not anchor.get("playing"):
+            return  # paused room: pause authority handled by enforce pass
+        now = time.time()
+        offset = self._clock_offset
+        host_clock_now = (now - offset) if offset is not None else now
+        elapsed = max(0.0, host_clock_now - float(anchor["t0"]))
+        target = float(anchor["pos"]) + elapsed
+        guest_time = self._ipc.get_time_pos()
+        if guest_time is None:
+            return
+        self._apply_sync_decision(target, guest_time)
+
+    def _apply_sync_decision(self, target_time: float, guest_time: float):
+        """Shared drift pipeline: EWMA smoothing -> speed zones / hard seek."""
         raw_drift = target_time - guest_time
         if self._ewma_drift == 0.0:
             self._ewma_drift = raw_drift
@@ -2046,7 +2355,6 @@ class WatchGuest:
             )
         drift = self._ewma_drift
 
-        # --- 2) Dynamic sync zones ---
         if abs(drift) <= SYNC_DEADBAND:
             # Deadband: perfectly in sync, play at 1.0x.
             self._apply_speed(1.0)

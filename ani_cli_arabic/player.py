@@ -90,13 +90,17 @@ class PlayerManager:
         subtitles: Optional[list] = None,
         aspect: Optional[str] = None,
         custom_hotkeys: bool = False,
+        start_paused: bool = False,
     ) -> list:
         """Build mpv arguments. With lock_controls, all default keybindings are
         disabled so guests cannot pause/seek manually; volume-only keys are bound
         via a generated input.conf. ``subtitles`` are remote track URLs passed
         via ``--sub-file``. ``aspect`` enforces a custom aspect ratio override
         (e.g. "16:9" or "4:3"). With ``custom_hotkeys`` the app's custom
-        keyboard map is applied via a generated input.conf."""
+        keyboard map is applied via a generated input.conf.
+        ``start_paused`` launches mpv with playback paused (Watch Together
+        simultaneous-start countdown: everyone buffers first, then a PLAY
+        anchor unpauses the room at the same instant)."""
         mpv_args = [
             mpv_path,
             '--fullscreen',
@@ -112,6 +116,8 @@ class PlayerManager:
             '--sub-auto=fuzzy',
             '--force-window=yes',
         ]
+        if start_paused:
+            mpv_args.append('--pause')
         if title:
             mpv_args.append('--force-media-title=' + title)
         if ipc_socket:
@@ -174,10 +180,13 @@ class PlayerManager:
         rc_port: Optional[int] = None,
         lock_controls: bool = False,
         subtitles: Optional[list] = None,
+        start_paused: bool = False,
     ) -> list:
         """Build VLC arguments. rc_port enables the rc interface over TCP
         (used for Watch Together sync). With lock_controls, playback hotkeys
-        are unbound so guests cannot pause/seek manually."""
+        are unbound so guests cannot pause/seek manually.
+        ``start_paused`` launches VLC paused (Watch Together simultaneous-start
+        countdown); supported on VLC 3.x+ via --start-paused."""
         vlc_args = [
             vlc_path,
             '--fullscreen',
@@ -186,6 +195,8 @@ class PlayerManager:
             '--live-caching=3000',
             '--audio-time-stretch',
         ]
+        if start_paused:
+            vlc_args.append('--start-paused')
         if title:
             vlc_args.append('--meta-title=' + title)
         if rc_port:
@@ -535,7 +546,7 @@ class PlayerManager:
                 print(detail, file=sys.stderr)
                 input("Press Enter to continue...")
 
-    def _play_mpv(self, url: str, title: str, mpv_path: str = None, headers: dict = None, ipc_socket: Optional[str] = None, subtitles: Optional[list] = None, aspect: Optional[str] = None, custom_hotkeys: bool = False, progress_cb=None, auto_skip: Optional[dict] = None):
+    def _play_mpv(self, url: str, title: str, mpv_path: str = None, headers: dict = None, ipc_socket: Optional[str] = None, subtitles: Optional[list] = None, aspect: Optional[str] = None, custom_hotkeys: bool = False, progress_cb=None, auto_skip: Optional[dict] = None, start_paused: bool = False):
         if not mpv_path:
             mpv_path = self.get_available_players().get('MPV')
 
@@ -566,6 +577,7 @@ class PlayerManager:
         mpv_args = self.build_mpv_args(
             mpv_path, url, title=title, headers=headers, ipc_socket=progress_socket,
             subtitles=subtitles, aspect=aspect, custom_hotkeys=custom_hotkeys,
+            start_paused=start_paused,
         )
 
         if self.console:
@@ -850,6 +862,7 @@ class PlayerManager:
         progress_cb=None,
         resolution: Optional[str] = None,
         auto_skip: Optional[dict] = None,
+        start_paused: bool = False,
     ):
         """Play ``url`` with the chosen player and, for mpv + HLS master
         playlists, auto-downgrade the quality once when the initial stream
@@ -895,6 +908,7 @@ class PlayerManager:
                 url, title, mpv_path, headers, ipc_socket=ipc_socket,
                 subtitles=subtitles, aspect=aspect, custom_hotkeys=custom_hotkeys,
                 progress_cb=progress_cb, auto_skip=auto_skip,
+                start_paused=start_paused,
             )
 
         # Build the watchdog IPC client up front so a Windows TCP fallback can
@@ -919,7 +933,7 @@ class PlayerManager:
                 self.build_mpv_args(
                     mpv_path, variant_url, title=title, headers=headers,
                     ipc_socket=ipc_arg, subtitles=subtitles, aspect=aspect,
-                    custom_hotkeys=custom_hotkeys,
+                    custom_hotkeys=custom_hotkeys, start_paused=start_paused,
                 ),
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
