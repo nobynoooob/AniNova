@@ -10,6 +10,49 @@ Format follows [Keep a Changelog](https://keepachangelog.com/) conventions. This
 
 ---
 
+## [v1.9.1] - 2026-08-25
+
+### 🌐 Dynamic Arabic Synopsis Translation (multi-provider, cached, privacy-gated)
+
+Anime synopses now render in Arabic even when no curated translation or API
+Arabic field exists — details view, hover cards, and featured slides.
+
+#### Translation engine (`translator.py`)
+- **Multi-provider chain**: Google gtx -> MyMemory translated.net fallback.
+  Live testing showed gtx answers HTTP 429 (abuse block) from many residential
+  IPs regardless of User-Agent; the chain degrades automatically and every hop
+  is traced to stderr with a `[translator]` prefix.
+- **Persistent two-tier cache**: in-memory session dict mirrored to
+  `~/.ani-cli-arabic/database/translations.json` (sha1-keyed, atomic writes,
+  600-entry LRU cap) — each synopsis is translated once per installation,
+  then served instantly forever.
+- Hardening: non-Arabic payloads rejected, MyMemory quota-warning shapes
+  (`responseStatus != 200`, `MYMEMORY WARNING` prefix) detected, <8-char
+  inputs skipped, 6s timeout, any failure degrades gracefully to English.
+
+#### UI integration
+- Async enhancer with token + connectivity guards: English text renders
+  instantly with a subtle skeleton pulse; resolved Arabic swaps in smoothly
+  under Cairo/RTL. Stale responses after re-render or toggling back to EN are
+  discarded — LTR restore stays pristine.
+- Wired into the details synopsis (`.anime-synopsis[data-anime-id]`), card
+  hover overlays, and featured hero slides.
+
+#### Privacy & settings
+- New **Dynamic Arabic translation** toggle (Privacy section, default ON):
+  when OFF the bridge returns before any network call. Synopses are only sent
+  online when AR mode is active and no local Arabic source exists.
+
+#### Verification
+- Provider-chain units: primary-path isolation, 429->fallback order,
+  dual-failure degradation, warning-payload rejection.
+- UI suite: unmapped-title fallback->swap (Bleach), EN-mode skips the bridge,
+  late-response-after-toggle guard, failure cleanup.
+- Live end-to-end on a gtx-blocked network: Bleach / Jujutsu Kaisen / Naruto
+  all translated via MyMemory, second pass pure cache-hits.
+
+---
+
 ## [v1.9.0] - 2026-08-25
 
 ### 🚀 Performance & Sync Engineering — Three-Phase Optimization (on top of the v1.8.0 UI overhaul)
