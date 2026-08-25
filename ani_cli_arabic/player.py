@@ -102,9 +102,12 @@ class PlayerManager:
             '--fullscreen',
             '--keep-open=yes',
             '--cache=yes',
+            # Buffer ~2 minutes ahead for slow/unstable connections; actual
+            # memory stays bounded by demuxer-max-bytes below.
+            '--cache-secs=120',
             '--demuxer-max-bytes=150M',
             '--demuxer-max-back-bytes=64M',
-            '--demuxer-readahead-secs=30',
+            '--demuxer-readahead-secs=120',
             '--hwdec=auto-safe',
             '--sub-auto=fuzzy',
             '--force-window=yes',

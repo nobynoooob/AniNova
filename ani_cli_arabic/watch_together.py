@@ -38,6 +38,7 @@ import threading
 import time
 import traceback
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Dict, Optional, Tuple
 
 from .config import SUPABASE_DEFAULT_KEY, SUPABASE_DEFAULT_URL
@@ -47,18 +48,21 @@ ROOM_CODE_LEN = 6
 MAX_MEMBERS = 8
 PROTOCOL_VERSION = 2
 GLOBAL_SKIP_SECONDS = 10.0
-HEARTBEAT_INTERVAL = 3.0
+# Fast-cadence sync: a 1s heartbeat + 250ms poll loop means drift is detected
+# and corrected ~3x sooner than before, keeping guests inside the speed-sync
+# deadband instead of drifting into hard-seek territory between beats.
+HEARTBEAT_INTERVAL = 1.0
 DRIFT_THRESHOLD = 1.5
 SYNC_HARD_SEEK_THRESHOLD = 2.5
 SEEK_BACKWARD_TOLERANCE = 2.0
 SEEK_FORWARD_TOLERANCE = 8.0
-POLL_INTERVAL = 0.5
+POLL_INTERVAL = 0.25
 RECONNECT_TIMEOUT = 30.0
 SEEK_COOLDOWN = 2.0
 # --- Adaptive speed sync (3-zone) ---
 SYNC_DEADBAND = 0.2           # |drift| <= this: play at 1.0x
 SYNC_SPEED_BAND = 2.5         # |drift| > this: hard seek instead of speed tweak
-SYNC_MAX_CATCHUP = 0.15       # max speed bump above 1.0x for slow catch-up
+SYNC_MAX_CATCHUP = 0.35       # max speed bump above 1.0x for slow catch-up
 SYNC_AHEAD_SPEED = 0.95       # speed when the guest is ahead (let host catch up)
 SYNC_EWMA_ALPHA = 0.3         # EWMA smoothing factor for drift (0 < a <= 1)
 SYNC_MIN_SPEED_INTERVAL = 1.0 # min seconds between consecutive speed changes
@@ -340,6 +344,14 @@ class MpvIpcClient:
         self._req_id = 0
         self._lock = threading.Lock()
         self._buf = b""
+        # Single-worker executor: every fire-and-forget control command
+        # (pause/seek/speed) is queued FIFO here instead of spawning a fresh
+        # thread per call. Guarantees commands reach mpv in broadcast order
+        # (a slow seek can never overtake a newer one) and stops the old
+        # thread-per-command storms under sync load.
+        self._cmd_pool = ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="mpv-ipc-cmd"
+        )
 
     @property
     def connected(self) -> bool:
@@ -383,6 +395,10 @@ class MpvIpcClient:
                 pass
             self._sock = None
         self._buf = b""
+        try:
+            self._cmd_pool.shutdown(wait=False)
+        except Exception:
+            pass
 
     def _send(self, obj: dict):
         if self._sock is None:
@@ -426,10 +442,20 @@ class MpvIpcClient:
         return None
 
     def send_command(self, command: list):
-        with self._lock:
-            if self._sock is None:
-                return
-            self._send({"command": command})
+        # Queued on the single-worker pool (FIFO, ordered); the job takes the
+        # socket lock so it never interleaves with a synchronous request().
+        def _job():
+            with self._lock:
+                if self._sock is None:
+                    return
+                try:
+                    self._send({"command": command})
+                except OSError:
+                    pass
+        try:
+            self._cmd_pool.submit(_job)
+        except RuntimeError:
+            pass  # pool already shut down (player closing)
 
     def get_time_pos(self) -> Optional[float]:
         try:
@@ -506,6 +532,17 @@ class VlcIpcClient:
         self._sock: Optional[socket.socket] = None
         self._lock = threading.Lock()
         self._buf = b""
+        # FIFO command worker: rate/seek/pause commands are serialized in
+        # broadcast order (see MpvIpcClient for the full rationale). VLC's rc
+        # interface is especially order-sensitive because every command emits
+        # a `> ` prompt that must be drained before the next read.
+        self._cmd_pool = ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="vlc-ipc-cmd"
+        )
+        # Cached duration for sub-second position math (get_position is a
+        # 0..1 fraction; multiplying by length yields seconds).
+        self._cached_length: Optional[float] = None
+        self._cached_length_ts = 0.0
 
     @property
     def connected(self) -> bool:
@@ -528,6 +565,10 @@ class VlcIpcClient:
         return False
 
     def close(self):
+        try:
+            self._cmd_pool.shutdown(wait=False)
+        except Exception:
+            pass
         if self._sock is not None:
             try:
                 self._sock.sendall(b"quit\n")
@@ -592,23 +633,63 @@ class VlcIpcClient:
     def send_command(self, command: str, timeout: float = 0.05) -> bool:
         """Send an rc command and drain its prompt without blocking long.
 
-        Used for fire-and-forget control (rate/seek) so the sync loop is never
-        stalled by VLC's ``> `` prompt. Drains the pending prompt with a short
-        timeout so it cannot corrupt the next ``request()`` read."""
-        with self._lock:
-            if self._sock is None:
-                return False
-            try:
-                self._send(command)
-            except OSError:
-                return False
-            try:
-                self._read_response(timeout)
-            except Exception:
-                pass
-            return True
+        Queued on the single-worker pool so commands apply strictly in
+        broadcast order; the drain (short `> ` prompt read) happens inside the
+        job so it can never corrupt the next ``request()`` read."""
+        def _job():
+            with self._lock:
+                if self._sock is None:
+                    return False
+                try:
+                    self._send(command)
+                except OSError:
+                    return False
+                try:
+                    self._read_response(timeout)
+                except Exception:
+                    pass
+                return True
+        try:
+            return bool(self._cmd_pool.submit(_job).result(timeout=5.0))
+        except Exception:
+            return False
+
+    def _get_length(self, max_age: float = 30.0) -> Optional[float]:
+        """Cached media length in seconds (VLC rc ``get_length`` -> int).
+        Cached briefly so position polling costs one round trip, not two."""
+        now = time.time()
+        if self._cached_length is not None and now - self._cached_length_ts < max_age:
+            return self._cached_length
+        resp = self.request("get_length") or ""
+        for line in resp.splitlines():
+            line = line.strip()
+            if line.isdigit() and int(line) > 0:
+                self._cached_length = float(int(line))
+                self._cached_length_ts = now
+                return self._cached_length
+        return None
 
     def get_time_pos(self) -> Optional[float]:
+        """Current playback position in seconds with sub-second precision.
+
+        VLC's ``get_time`` only returns whole seconds (+/-1s quantization,
+        which used to put a hard floor on guest sync accuracy). ``get_position``
+        returns a 0..1 fraction instead; multiplying by the cached media
+        length yields millisecond-class resolution. Falls back to the integer
+        ``get_time`` path whenever either primitive is unavailable."""
+        # Preferred: fractional position x duration.
+        resp = self.request("get_position") or ""
+        for line in resp.splitlines():
+            line = line.strip()
+            try:
+                frac = float(line)
+            except ValueError:
+                continue
+            if 0.0 <= frac <= 1.0:
+                length = self._get_length()
+                if length:
+                    return frac * length
+        # Fallback: legacy whole-second parse.
         resp = self.request("get_time") or ""
         for line in resp.splitlines():
             line = line.strip()
@@ -1799,7 +1880,9 @@ class WatchGuest:
             self._apply_speed(1.0)
         elif drift > SYNC_DEADBAND and drift <= SYNC_SPEED_BAND:
             # Member is behind: smoothly speed up to catch the host.
-            speed = 1.0 + min(drift * 0.05, SYNC_MAX_CATCHUP)
+            # Gain 0.15 + cap 0.35 -> e.g. 1s behind = 1.15x (converges ~7s),
+            # 1.75s+ behind rides the 1.35x cap instead of seeking.
+            speed = 1.0 + min(drift * 0.15, SYNC_MAX_CATCHUP)
             self._apply_speed(speed)
         elif drift >= -SYNC_SPEED_BAND and drift < -SYNC_DEADBAND:
             # Member is ahead: slow down so the host catches up.

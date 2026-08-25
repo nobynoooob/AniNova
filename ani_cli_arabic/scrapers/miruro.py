@@ -125,16 +125,13 @@ class MiruroScraper(BaseScraper):
             cls._last_request_time = time.time()
 
     def _pipe_fetch(self, payload: dict, cancel_event=None) -> Optional[dict]:
-        # Uses the shared lazy browser runtime: the headless Chromium launches
-        # ONCE and is reused across pipe calls (episodes fetch, sources fetch,
-        # pipe search) instead of a fresh browser per call. Fast HTTP scrapers
-        # never touch this code path.
-        #
-        # Retries happen ONLY on retryable HTTP statuses (429/5xx). A job
-        # timeout or exception is NOT retried: with a shared worker, a retry
-        # would just enqueue another job behind the still-running (abandoned)
-        # one and back up the queue for every other caller.
-        from ._browser import browser_page
+        # Uses the shared lazy browser runtime with a PERSISTENT WARM PAGE:
+        # Chromium launches once and the miruro.tv page stays alive between
+        # pipe calls with hot Cloudflare cookies, so only the first call pays
+        # the full goto/networkidle warmup (~5s); subsequent episodes/sources/
+        # search calls skip navigation entirely and go straight to evaluate().
+        # A failed job destroys the warm page so the next call starts clean.
+        from ._browser import browser_warm_page
         from ._http_log import timed
 
         last_error = None
@@ -145,10 +142,11 @@ class MiruroScraper(BaseScraper):
 
             self._respect_rate_limit()
 
-            def _fetch(page):
-                page.route("**/*", _block_heavy_resource)
-                with timed("miruro:pipe:goto"):
-                    page.goto(MIRURO_BASE, wait_until="networkidle", timeout=25000)
+            def _fetch(page, fresh):
+                if fresh:
+                    # Route blocking persists on the page; install exactly once
+                    # per page lifetime (stacked handlers would slow requests).
+                    page.route("**/*", _block_heavy_resource)
                 encoded = _encode_pipe(payload)
                 js = f"""
                 (async () => {{
@@ -161,8 +159,12 @@ class MiruroScraper(BaseScraper):
 
             try:
                 with timed("miruro:pipe:job"):
-                    result = browser_page(
-                        _fetch, user_agent=USER_AGENT, timeout=30.0,
+                    result = browser_warm_page(
+                        _fetch,
+                        key="miruro-tv",
+                        url=MIRURO_BASE,
+                        user_agent=USER_AGENT,
+                        timeout=30.0,
                         cancel_event=cancel_event,
                     )
             except Exception as e:

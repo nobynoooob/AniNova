@@ -18,7 +18,8 @@ work happens on the thread that started it).
 """
 import queue
 import threading
-from typing import Callable, Optional
+import time
+from typing import Callable, Dict, Optional
 
 from ._http_log import log_http_error, log_timing
 
@@ -217,3 +218,90 @@ def browser_page(
         timeout=timeout,
         cancel_event=cancel_event,
     )
+
+
+# ---------------------------------------------------------------------------
+# Persistent warm pages
+# ---------------------------------------------------------------------------
+# A fresh-context-per-call layout is perfect for isolation but terrible for
+# Cloudflare-gated sites: every call starts with cold cookies and pays a full
+# ``page.goto(...)`` warmup (multi seconds on miruro.tv). A *warm page* is one
+# long-lived context+page kept alive on the worker between jobs — CF cookies
+# stay hot and subsequent pipe calls skip navigation entirely.
+#
+# All access happens inside jobs on the single worker thread, so the registry
+# below needs no lock of its own.
+
+_WARM_PAGES: Dict[str, dict] = {}
+_WARM_DEFAULT_MAX_AGE = 1200.0  # re-navigate after 20 min to keep cookies hot
+
+
+def _drop_warm_page(key: str):
+    entry = _WARM_PAGES.pop(key, None)
+    if entry is None:
+        return
+    ctx = entry.get("ctx")
+    if ctx is not None:
+        try:
+            ctx.close()
+        except Exception:
+            pass
+
+
+def browser_warm_page(
+    fn: Callable,
+    *,
+    key: str,
+    url: str,
+    user_agent: Optional[str] = None,
+    goto_wait: str = "networkidle",
+    goto_timeout: float = 25000.0,
+    max_age: float = _WARM_DEFAULT_MAX_AGE,
+    timeout: float = _DEFAULT_JOB_TIMEOUT,
+    cancel_event: Optional[threading.Event] = None,
+):
+    """Run ``fn(page, fresh)`` on a persistent per-key page over the browser.
+
+    ``fresh`` is True when the page was just created for this call — use it to
+    perform one-time setup (route handlers, init scripts). The page is created
+    + navigated to ``url`` on first use (or when older than ``max_age``), then
+    reused with hot cookies in between. When ``fn`` raises, the warm page is
+    destroyed so the next call starts from a clean context.
+    """
+    def _job(browser):
+        entry = _WARM_PAGES.get(key)
+        page = None
+        fresh = False
+        stale = True
+        if entry is not None:
+            p = entry.get("page")
+            try:
+                if p is not None and not p.is_closed():
+                    page = p
+                    age = time.monotonic() - entry.get("ts", 0.0)
+                    stale = age > max_age
+            except Exception:
+                page = None
+        if page is None:
+            _drop_warm_page(key)
+            ctx = browser.new_context(user_agent=user_agent) if user_agent \
+                else browser.new_context()
+            page = ctx.new_page()
+            _WARM_PAGES[key] = {"page": page, "ctx": ctx,
+                                "ts": time.monotonic()}
+            fresh = True
+            stale = False  # just created; caller navigates below exactly once
+
+        try:
+            if fresh or stale:
+                t0 = time.monotonic()
+                page.goto(url, wait_until=goto_wait, timeout=goto_timeout)
+                log_timing("browser:warm_goto", time.monotonic() - t0)
+                _WARM_PAGES[key]["ts"] = time.monotonic()
+            return fn(page, fresh)
+        except Exception:
+            # Broken page/state: drop it so the next job gets a clean slate.
+            _drop_warm_page(key)
+            raise
+
+    return browser_run(_job, timeout=timeout, cancel_event=cancel_event)

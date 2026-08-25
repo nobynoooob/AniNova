@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import sys
 from typing import Dict, List, Optional, Tuple
 
@@ -42,7 +43,20 @@ _PROVIDER_ORDER = {
     "arabic": ARABIC_PROVIDERS,
 }
 
+# Per-stage timeout budget. Browser-backed scrapers (Playwright page loads,
+# Cloudflare warmup, JS rendering) legitimately need the full 30s; pure-HTTP
+# providers answer within a few seconds or are dead — giving them 12s instead
+# of 30s stops one unresponsive host from stalling the whole chain.
 _PROVIDER_TIMEOUT = 30.0
+_PROVIDER_TIMEOUT_BROWSER = 30.0
+_PROVIDER_TIMEOUT_HTTP = 12.0
+
+
+def _provider_timeout(scraper: BaseScraper) -> float:
+    """Timeout budget for one provider stage (browser vs HTTP scraper)."""
+    if getattr(scraper, "requires_browser", False):
+        return _PROVIDER_TIMEOUT_BROWSER
+    return _PROVIDER_TIMEOUT_HTTP
 
 
 def _supports_kwarg(fn, name: str) -> bool:
@@ -152,13 +166,14 @@ class ProviderManager:
                 "translation_mode": (mode or "sub").lower(),
             }
             try:
+                stage_timeout = _provider_timeout(scraper)
                 with timed(f"provider:{name}:total"):
                     result = await asyncio.wait_for(
                         asyncio.to_thread(
                             self._try_provider, scraper, anime_title, episode_num,
                             mode, abort_event,
                         ),
-                        timeout=_PROVIDER_TIMEOUT,
+                        timeout=stage_timeout,
                     )
                 if result:
                     url, headers = result
@@ -166,9 +181,9 @@ class ProviderManager:
                     return url, headers, name
                 _log(f"[✗] {name} returned no stream.\n")
             except asyncio.TimeoutError:
-                _log(f"[✗] {name} timed out after {_PROVIDER_TIMEOUT}s.\n")
-                self._report_error(f"{name} timed out after {_PROVIDER_TIMEOUT}s", context)
-                ProviderManager._log_debug(name, f"timed out after {_PROVIDER_TIMEOUT}s")
+                _log(f"[✗] {name} timed out after {stage_timeout}s.\n")
+                self._report_error(f"{name} timed out after {stage_timeout}s", context)
+                ProviderManager._log_debug(name, f"timed out after {stage_timeout}s")
             except Exception as exc:
                 _log(f"[✗] {name} errored ({type(exc).__name__}: {exc}), "
                      f"skipping to next provider.\n")
@@ -207,9 +222,18 @@ class ProviderManager:
 
     @staticmethod
     def _log_debug(provider_name: str, message: str):
-        """Append one line of stream-resolution debug info to debug_streams.log."""
+        """Append one line of stream-resolution debug info to debug_streams.log.
+
+        Size-rotated (1 MB -> .old) so a long-lived install can never grow the
+        file without bound."""
         try:
-            with open("debug_streams.log", "a") as f:
+            path = "debug_streams.log"
+            try:
+                if os.path.getsize(path) > 1_000_000:
+                    os.replace(path, path + ".old")
+            except OSError:
+                pass
+            with open(path, "a") as f:
                 f.write(f"Provider: {provider_name} | {message}\n")
         except Exception:
             pass
