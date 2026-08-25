@@ -6,6 +6,7 @@ in ``ani_cli_arabic/ui/index.html`` that talks to this bridge.
 
 Run with:  ``ani-cli-arabic --gui``  (or ``python -m ani_cli_arabic.gui``)
 """
+import datetime
 import functools
 import json
 import os
@@ -180,6 +181,21 @@ query ($search: String, $page: Int, $perPage: Int) {
   }
 }"""
 
+_BROWSE_GRAPHQL = """\
+query ($page: Int, $perPage: Int, $genre: [String], $sort: [MediaSort], $season: MediaSeason, $seasonYear: Int) {
+  Page(page: $page, perPage: $perPage) {
+    pageInfo { total currentPage lastPage hasNextPage }
+    media(type: ANIME, genre_in: $genre, sort: $sort, season: $season, season_year: $seasonYear, isAdult: false) {
+      id
+      title { romaji english }
+      coverImage { large }
+      format
+      averageScore
+      genres
+    }
+  }
+}"""
+
 _ANILIST_DETAIL_QUERY = """\
 query ($id: Int) {
   Media(id: $id, type: ANIME) {
@@ -221,6 +237,118 @@ _STATUS_LABELS = {
     "CANCELLED": "Cancelled",
     "HIATUS": "Hiatus",
 }
+
+
+# ---------------------------------------------------------------------------
+# Browse / category engine (AniList genre+sort+season queries)
+# ---------------------------------------------------------------------------
+_SEASON_BY_MONTH = {
+    12: "WINTER", 1: "WINTER", 2: "WINTER",
+    3: "SPRING", 4: "SPRING", 5: "SPRING",
+    6: "SUMMER", 7: "SUMMER", 8: "SUMMER",
+    9: "FALL", 10: "FALL", 11: "FALL",
+}
+_SEASON_CYCLE = ["WINTER", "SPRING", "SUMMER", "FALL"]
+
+_BROWSE_SORTS = (
+    "TRENDING_DESC", "POPULARITY_DESC", "SCORE_DESC", "FAVORITES_DESC",
+)
+_BROWSE_PER_PAGE = 30
+_BROWSE_CACHE_MAX = 240
+_BROWSE_CACHE: Dict[tuple, Dict[str, Any]] = {}
+_BROWSE_CACHE_LOCK = threading.Lock()
+
+
+def _current_season(today=None) -> tuple:
+    """(season_name, year) for AniList's season model (Dec counts as Winter)."""
+    today = today or datetime.date.today()
+    return _SEASON_BY_MONTH[today.month], today.year
+
+
+def _next_season(today=None) -> tuple:
+    name, year = _current_season(today)
+    idx = (_SEASON_CYCLE.index(name) + 1) % len(_SEASON_CYCLE)
+    nxt = _SEASON_CYCLE[idx]
+    return (nxt, year + 1) if (name == "FALL" and nxt == "WINTER") else (nxt, year)
+
+
+def _browse_cache_key(genre, sort, season, page, per_page) -> tuple:
+    return (str(genre or "").strip().lower(), str(sort or "").upper(),
+            str(season or "").lower(), int(page), int(per_page))
+
+
+def _anilist_browse(genre: str, sort: str, season: str,
+                    page: int, per_page: int = _BROWSE_PER_PAGE) -> Dict[str, Any]:
+    """Fetch one page of category results from AniList.
+
+    ``season`` is ''|'current'|'upcoming'; the concrete MediaSeason + year are
+    derived from today's date. Returns ``{"items": [...], "has_next": bool,
+    "page": int}`` shaped like search hits (id/title/poster/provider) so the
+    frontend card renderer can consume them directly. Raises on network/HTTP
+    failure so callers can distinguish errors from empty results.
+    """
+    variables: Dict[str, Any] = {
+        "page": max(1, int(page)),
+        "perPage": max(1, min(50, int(per_page))),
+        "sort": [sort if sort in _BROWSE_SORTS else "TRENDING_DESC"],
+    }
+    if genre:
+        variables["genre"] = [genre]
+    if season in ("current", "upcoming"):
+        s_name, s_year = _current_season() if season == "current" else _next_season()
+        variables["season"] = s_name
+        variables["seasonYear"] = s_year
+
+    import httpx
+    r = httpx.post(
+        _ANILIST_GRAPHQL,
+        json={"query": _BROWSE_GRAPHQL, "variables": variables},
+        timeout=12.0,
+        headers={"User-Agent": f"ani-cli-ar/{__version__}"},
+    )
+    if r.status_code != 200:
+        raise RuntimeError(f"AniList HTTP {r.status_code}")
+    payload = (r.json().get("data") or {}).get("Page") or {}
+    items = []
+    for m in payload.get("media") or []:
+        if not m.get("id"):
+            continue
+        title_obj = m.get("title") or {}
+        items.append({
+            "id": str(m["id"]),
+            "title": title_obj.get("english") or title_obj.get("romaji") or "",
+            "poster": (m.get("coverImage") or {}).get("large") or "",
+            "provider": "browse",
+            "format": m.get("format") or "",
+            "score": (m.get("averageScore") / 10.0) if m.get("averageScore") else None,
+            "genres": list(m.get("genres") or []),
+        })
+    info = payload.get("pageInfo") or {}
+    return {
+        "items": items,
+        "has_next": bool(info.get("hasNextPage")),
+        "page": int(info.get("currentPage") or page),
+    }
+
+
+def _anilist_browse_cached(genre, sort, season, page, per_page=_BROWSE_PER_PAGE):
+    """Session-memory cache wrapper around :func:`_anilist_browse`.
+
+    Switching genres back and forth re-serves pages instantly without touching
+    the API; failures are NOT cached so a transient outage retries on demand."""
+    key = _browse_cache_key(genre, sort, season, page, per_page)
+    with _BROWSE_CACHE_LOCK:
+        hit = _BROWSE_CACHE.get(key)
+    if hit is not None:
+        return hit
+    result = _anilist_browse(genre, sort, season, page, per_page)
+    with _BROWSE_CACHE_LOCK:
+        if len(_BROWSE_CACHE) >= _BROWSE_CACHE_MAX:
+            # FIFO trim (dicts preserve insertion order)
+            for k in list(_BROWSE_CACHE.keys())[: len(_BROWSE_CACHE) - _BROWSE_CACHE_MAX + 1]:
+                _BROWSE_CACHE.pop(k, None)
+        _BROWSE_CACHE[key] = result
+    return result
 
 
 def _anilist_media(anime_id: str) -> Dict[str, Any]:
@@ -2004,6 +2132,33 @@ class JSApi:
     # Frontend-facing settings (full Settings menu: playback, auto-skip,
     # pre-roll, watch together / global hotkeys, downloads, privacy)
     # ------------------------------------------------------------------
+    def browse_category(self, genre: str = "", sort: str = "TRENDING_DESC",
+                        season: str = "", page: int = 1,
+                        per_page: int = _BROWSE_PER_PAGE) -> Dict:
+        """Category/genre browsing backed by AniList (session-cached).
+
+        ``genre`` is one of the canonical AniList genre names ('' = all),
+        ``sort`` one of _BROWSE_SORTS, ``season`` ''|'current'|'upcoming'.
+        Returns ``{"ok", "items", "has_next", "page"}``; items are shaped like
+        search hits so the frontend card renderer consumes them directly.
+        Failures return ``{"ok": False, "error": ...}`` and are never cached,
+        so a transient AniList outage retries on the next click."""
+        try:
+            result = _anilist_browse_cached(genre, sort, season,
+                                            int(page or 1), int(per_page))
+            return {"ok": True, **result}
+        except Exception as exc:
+            try:
+                from .monitoring import monitor
+                monitor.track_error("Browse category failed",
+                                    {"genre": genre, "sort": sort,
+                                     "season": season, "page": page},
+                                    exception=exc)
+            except Exception:
+                pass
+            return {"ok": False, "error": f"{type(exc).__name__}: {exc}",
+                    "items": [], "has_next": False, "page": int(page or 1)}
+
     def translate_synopsis(self, title: str, text: str) -> Dict:
         """Dynamic Arabic translation for synopses (i18n engine).
 

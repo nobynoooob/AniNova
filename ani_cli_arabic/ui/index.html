@@ -1142,6 +1142,62 @@
   .wt-empty { color: var(--muted); font-size: 13px; padding: 10px 0; text-align: center; }
   .wt-modal-hint { margin-top: 14px; font-size: 12px; color: var(--muted); }
 
+  /* ---------- browse / categories ---------- */
+  .browse-filters {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+  .chip-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .g-chip {
+    padding: 7px 16px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    background: var(--panel);
+    border: 1px solid var(--border-soft);
+    color: var(--muted);
+    transition: background .18s, color .18s, border-color .18s, transform .18s;
+  }
+  .g-chip:hover { color: var(--text); border-color: var(--accent); transform: translateY(-1px); }
+  .g-chip.active {
+    background: var(--sunrise);
+    border-color: transparent;
+    color: #fff;
+    box-shadow: 0 4px 14px rgba(255, 126, 95, .3);
+  }
+  .browse-controls { display: flex; gap: 10px; flex-wrap: wrap; }
+  .browse-controls select { min-width: 170px; }
+  html[dir="rtl"] .browse-controls { flex-direction: row-reverse; }
+  .loadmore-wrap { display: flex; justify-content: center; padding: 22px 0 8px; }
+  #btnLoadMore { min-width: 200px; }
+  #btnLoadMore:disabled { opacity: .55; cursor: wait; }
+
+  /* skeleton loader cards */
+  .sk-card {
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--panel);
+    border: 1px solid var(--border-soft);
+  }
+  .sk-poster {
+    aspect-ratio: 2 / 3;
+    background: linear-gradient(100deg, #222 40%, #2c2c2c 50%, #222 60%);
+    background-size: 200% 100%;
+    animation: skShimmer 1.1s linear infinite;
+  }
+  .sk-line {
+    height: 11px;
+    margin: 10px 12px;
+    border-radius: 6px;
+    background: linear-gradient(100deg, #222 40%, #2c2c2c 50%, #222 60%);
+    background-size: 200% 100%;
+    animation: skShimmer 1.1s linear infinite;
+  }
+  .sk-line.short { width: 55%; }
+  @keyframes skShimmer { to { background-position: -200% 0; } }
+
   /* ---------- toast ---------- */
   #toast {
     position: fixed;
@@ -1767,6 +1823,31 @@
       <div class="grid" id="grid"></div>
     </section>
 
+    <!-- ================= BROWSE / CATEGORIES VIEW ================= -->
+    <section class="view" id="browse-view">
+      <div class="section-title" data-i18n="browse.title">Browse Anime</div>
+      <div class="browse-filters">
+        <div class="chip-row" id="genreChips"></div>
+        <div class="browse-controls">
+          <select id="browseSort" data-i18n-title="browse.sort_title">
+            <option value="TRENDING_DESC" data-i18n="sort.trending">Trending Now</option>
+            <option value="POPULARITY_DESC" data-i18n="sort.popular">Most Popular</option>
+            <option value="SCORE_DESC" data-i18n="sort.score">Top Rated</option>
+            <option value="FAVORITES_DESC" data-i18n="sort.favorites">Favorites</option>
+          </select>
+          <select id="browseSeason">
+            <option value="" data-i18n="season.all">All Seasons</option>
+            <option value="current" data-i18n="season.current">This Season</option>
+            <option value="upcoming" data-i18n="season.upcoming">Upcoming</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid" id="browseGrid"></div>
+      <div class="loadmore-wrap">
+        <button id="btnLoadMore" style="display:none" data-i18n="browse.load_more">Load More</button>
+      </div>
+    </section>
+
     <!-- ================= DETAILS / PLAYER VIEW ================= -->
     <section class="view" id="details-view">
       <div class="details-topbar">
@@ -2224,6 +2305,12 @@
   const I18N = {
     en: {
       "nav.home": "Home", "nav.browse": "Browse", "nav.library": "Library",
+      "browse.title": "Browse Anime", "browse.all": "All", "browse.load_more": "Load More",
+      "browse.sort_title": "Sort results by",
+      "sort.trending": "Trending Now", "sort.popular": "Most Popular",
+      "sort.score": "Top Rated", "sort.favorites": "Favorites",
+      "season.all": "All Seasons", "season.current": "This Season", "season.upcoming": "Upcoming",
+      "badge.browse": "Discover",
       "search.placeholder": "Search anime...", "search.button": "Search",
       "search.results_title": "Search Results", "search.dropdown_title": "Search results",
       "search.no_matches": "No matches \u2014 press Enter to search all titles",
@@ -2405,6 +2492,12 @@
     },
     ar: {
       "nav.home": "الرئيسية", "nav.browse": "تصفح", "nav.library": "المكتبة",
+      "browse.title": "تصفح الأنمي", "browse.all": "الكل", "browse.load_more": "تحميل المزيد",
+      "browse.sort_title": "ترتيب النتائج حسب",
+      "sort.trending": "الأكثر رواجًا", "sort.popular": "الأكثر شعبية",
+      "sort.score": "الأعلى تقييمًا", "sort.favorites": "المفضلة الأكثر",
+      "season.all": "كل المواسم", "season.current": "هذا الموسم", "season.upcoming": "القادم",
+      "badge.browse": "استكشاف",
       "search.placeholder": "ابحث عن أنمي...", "search.button": "بحث",
       "search.results_title": "نتائج البحث", "search.dropdown_title": "نتائج البحث",
       "search.no_matches": "لا توجد نتائج \u2014 اضغط Enter للبحث في كل العناوين",
@@ -3028,6 +3121,13 @@
     if (sv && sv.classList.contains("active") && lastGridResults.length) {
       try { renderGrid(lastGridResults); } catch (e) {}
     }
+    // Browse: relabel genre chips; re-fetch the active page when visible so
+    // badges/titles localize (backend session-cache makes this instant).
+    try { buildGenreChips(); } catch (e) {}
+    const bv = document.getElementById("browse-view");
+    if (bv && bv.classList.contains("active") && bLoadedOnce) {
+      try { loadBrowse(true); } catch (e) {}
+    }
     const dv = document.getElementById("details-view");
     if (dv && dv.classList.contains("active") && details) {
       try { renderHero(); } catch (e) {}
@@ -3381,7 +3481,7 @@
   }
   $("#btnBrand").addEventListener("click", goHome);
   $("#navHome").addEventListener("click", goHome);
-  $("#navBrowse").addEventListener("click", goHome);
+  $("#navBrowse").addEventListener("click", openBrowse);
   $("#navLibrary").addEventListener("click", () => toast(t("toast.library")));
   $("#btnNotif").addEventListener("click", () => toast(t("toast.no_notif")));
   $("#btnProfile").addEventListener("click", () => toast(t("toast.signed_in")));
@@ -3474,6 +3574,8 @@
     let badgeText;
     if (isTrending) {
       badgeText = t("badge.trending");
+    } else if (r.provider === "browse") {
+      badgeText = t("badge.browse");
     } else if (srcCount > 1) {
       badgeText = t("badge.sources", {n: srcCount});
     } else {
@@ -3666,6 +3768,111 @@
     grid.innerHTML = "";
     for (const r of results) grid.appendChild(cardFor(r));
   }
+
+  // ---------- browse / categories ----------
+  const BROWSE_GENRES = ["Action", "Adventure", "Comedy", "Drama", "Fantasy",
+                         "Horror", "Mystery", "Romance", "Sci-Fi", "Slice of Life"];
+  let bGenre = "";
+  let bSort = "TRENDING_DESC";
+  let bSeason = "";
+  let bPage = 1;
+  let bHasNext = false;
+  let bLoadedOnce = false;
+  let bLoading = false;
+
+  function buildGenreChips() {
+    const wrap = $("#genreChips");
+    if (!wrap) return;
+    const chips = [{ v: "", label: t("browse.all") }]
+      .concat(BROWSE_GENRES.map(g => ({ v: g, label: localizeGenre(g) })));
+    wrap.innerHTML = "";
+    for (const c of chips) {
+      const btn = document.createElement("button");
+      btn.className = "g-chip" + (bGenre === c.v ? " active" : "");
+      btn.textContent = c.label;
+      if (c.v) btn.dataset.genre = c.v;
+      btn.addEventListener("click", () => {
+        if (bGenre === c.v || bLoading) return;
+        bGenre = c.v;
+        wrap.querySelectorAll(".g-chip").forEach(x => x.classList.remove("active"));
+        btn.classList.add("active");
+        loadBrowse(true);
+      });
+      wrap.appendChild(btn);
+    }
+  }
+
+  function skeletonCards(n) {
+    const frag = document.createDocumentFragment();
+    for (let i = 0; i < n; i++) {
+      const d = document.createElement("div");
+      d.className = "sk-card";
+      d.innerHTML = '<div class="sk-poster"></div><div class="sk-line"></div><div class="sk-line short"></div>';
+      frag.appendChild(d);
+    }
+    return frag;
+  }
+
+  function openBrowse() {
+    showView("browse-view");
+    buildGenreChips();
+    if (!bLoadedOnce) loadBrowse(true);
+  }
+
+  async function loadBrowse(reset) {
+    if (bLoading) return;
+    const gridEl = $("#browseGrid");
+    const btn = $("#btnLoadMore");
+    if (!gridEl) return;
+    bLoading = true;
+    if (reset) {
+      bPage = 1;
+      bHasNext = false;
+      gridEl.innerHTML = "";
+      gridEl.appendChild(skeletonCards(12));
+      if (btn) { btn.style.display = "none"; btn.disabled = false; }
+    } else if (btn) {
+      btn.disabled = true;
+    }
+    try {
+      const api = await getApi();
+      const res = await api.browse_category(bGenre, bSort, bSeason, bPage);
+      if (!res || !res.ok) throw new Error((res && res.error) || "browse failed");
+      const items = Array.isArray(res.items) ? res.items : [];
+      if (reset) gridEl.innerHTML = "";
+      if (reset && !items.length) {
+        gridEl.innerHTML = `<div class="empty">${t("search.no_results")}</div>`;
+      }
+      for (const r of items) gridEl.appendChild(cardFor(r));
+      bHasNext = !!res.has_next;
+      if (btn) {
+        btn.style.display = bHasNext ? "inline-block" : "none";
+        btn.disabled = false;
+      }
+      bLoadedOnce = true;
+    } catch (e) {
+      if (reset) gridEl.innerHTML = `<div class="empty">${t("toast.search_failed")}</div>`;
+      else toast(String(e.message || e), true);
+      if (btn && !bHasNext) btn.style.display = "none";
+      if (btn) btn.disabled = false;
+    } finally {
+      bLoading = false;
+    }
+  }
+
+  $("#browseSort").addEventListener("change", (e) => {
+    bSort = e.target.value;
+    loadBrowse(true);
+  });
+  $("#browseSeason").addEventListener("change", (e) => {
+    bSeason = e.target.value;
+    loadBrowse(true);
+  });
+  $("#btnLoadMore").addEventListener("click", () => {
+    if (bLoading || !bHasNext) return;
+    bPage += 1;
+    loadBrowse(false);
+  });
 
   // ---------- home: featured hero carousel ----------
   let featuredItems = [];
