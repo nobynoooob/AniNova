@@ -10,6 +10,45 @@ Format follows [Keep a Changelog](https://keepachangelog.com/) conventions. This
 
 ---
 
+## [v1.8.0] - 2026-08-25
+
+### ✨ Complete UI Overhaul, Glassmorphism Aesthetic, and Deep Bilingual Arabic/English Localization
+
+#### Visual & Design Polish
+- **Glassmorphism**: blurred/saturated top navigation, gradient modal cards with
+  inner-highlight borders, glass toast and live-search dropdown.
+- **Micro-interactions**: card hover lift with poster zoom and accent glow,
+  nav pill / icon button / day pill / episode tile transitions, carousel arrow
+  scaling, primary-button glow, view fade-in and modal card-in animations.
+- **Alignment & typography**: unified card widths across strips and grids,
+  provider-line truncation, gradient accent dash on section titles, tuned
+  letter-spacing (disabled for Arabic).
+
+#### Bilingual (AR/RTL) Perfection
+- **RTL hardening**: Cairo font enforced on all controls (buttons, inputs,
+  selects), mirrored absolute badges and bookmark icons, carousel dots/arrows
+  flip sides in RTL, settings switch knob slides from the right edge,
+  continue-watching progress fills from the right, direction-aware hover
+  shifts, `unicode-bidi: plaintext` so English descriptions render cleanly
+  inside Arabic layout.
+- **Arabic descriptions**: `localizeDescription()` helper — API-provided Arabic
+  field → curated offline AR dictionary (~23 popular titles) → clean bidi
+  fallback; wired into hero synopsis, card hover overlays, featured slides.
+- **Status localization**: `localizeStatus()` covers the full AniList status
+  vocabulary (airing/completed/hiatus/cancelled/upcoming) in both languages.
+- **100% sweep**: `data-i18n` added to all previously hardcoded labels
+  (Details/Genres fact labels, Show more toggle, My List label, WATCH2GETHER
+  button, Select-an-episode placeholder, pre-roll message); translated schedule
+  day names, episode-count badges, crumbs type, and episode subtitle titles.
+
+#### Language-Switch Integrity
+- Toggling EN ↔ AR now re-renders every dynamic surface (featured hero,
+  schedule bar + strip, trending, top 10, continue watching, My List, search
+  grid, details hero, episode list) — zero stale language fragments on
+  round-trip. Hover-metadata cache resets so synopses re-localize on demand.
+
+---
+
 ## [v1.7.0] - 2026-08-19
 
 ### 📊 Telemetry Engine Rewrite (Async, Batched, Privacy-First)
