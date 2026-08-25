@@ -2197,6 +2197,9 @@
       "toast.no_episode": "No episode selected",
       "toast.list_failed": "Could not update My List",
       "toast.reset_done": "Settings reset to defaults",
+      "toast.failed_reset": "Failed to reset settings",
+      "update.available": "You're on v{cur} — v{latest} is available.",
+      "cat.sub": "Sub", "cat.dub": "Dub", "cat.ar_sub": "Arabic Sub",
       "auto_skip.on": "Auto-skip: on", "auto_skip.off": "Auto-skip: off",
       "schedule.upcoming": "Upcoming This Week",
       "schedule.upcoming_day": "Upcoming · {day}",
@@ -2206,7 +2209,58 @@
       "badge.featured": "FEATURED", "badge.trending": "TRENDING", "badge.free": "FREE",
       "badge.sources": "{n} sources", "badge.source": "1 source",
       "badge.tv": "TV", "badge.movie": "MOVIE", "badge.ova": "OVA", "badge.special": "SPECIAL",
-      "action.watch_free": "▶ WATCH FREE"
+      "action.watch_free": "▶ WATCH FREE",
+      "details.panel_title": "DETAILS",
+      "details.genres_label": "GENRES",
+      "details.status_label": "Status",
+      "details.status_ongoing": "Ongoing",
+      "details.status_completed": "Completed",
+      "details.duration_format": "~{min} min/ep",
+      "details.episodes_format": "{n} eps",
+      "details.my_list_btn": "MY LIST +",
+      "details.watch_together_btn": "WATCH2GETHER",
+      "details.resume": "Resume",
+      "details.continue": "Continue",
+      "continue.episode": "Ep {n}",
+      "genres.supernatural": "Supernatural",
+      "genres.adventure": "Adventure",
+      "genres.action": "Action",
+      "genres.comedy": "Comedy",
+      "genres.drama": "Drama",
+      "genres.sci_fi": "Sci-Fi",
+      "genres.romance": "Romance",
+      "genres.fantasy": "Fantasy",
+      "genres.slice_of_life": "Slice of Life",
+      "genres.mystery": "Mystery",
+      "genres.horror": "Horror",
+      "genres.thriller": "Thriller",
+      "genres.sports": "Sports",
+      "genres.music": "Music",
+      "episode.search_placeholder": "Find episode number...",
+      "schedule.airing_now": "Airing now",
+      "schedule.in_days": "in {n}d",
+      "schedule.in_hours": "in {h}h {m}m",
+      "schedule.in_minutes": "in {m}m",
+      "bookmark.add": "Add to My List",
+      "bookmark.remove": "Remove from My List",
+      "bookmark.in_list": "In My List",
+      "bookmark.my_list": "MY LIST +",
+      "toast.added_list": "Added to My List",
+      "toast.removed_list": "Removed from My List",
+      "episode.label": "Episode {n}",
+      "episode.ep_short": "Ep {n}",
+      "playback.resolving": "Resolving stream for Ep {n} with {player}…",
+      "playback.playing": "Playing with {player}",
+      "playback.failed": "Playback failed",
+      "wt.failed_host": "Failed to host room",
+      "wt.failed_join": "Failed to join room",
+      "wt.room_hosted": "Room hosted! Code: {code}",
+      "wt.joined_room": "Joined room {code}",
+      "wt.enter_code": "Enter 6-digit room code:",
+      "search.no_results": "No results. Try another title.",
+      "schedule.empty_day": "No releases scheduled for this day.",
+      "wt.host_label": "Host",
+      "wt.guest_label": "Guest"
     },
     ar: {
       "nav.home": "الرئيسية", "nav.browse": "تصفح", "nav.library": "المكتبة",
@@ -2311,122 +2365,273 @@
       "toast.no_episode": "لم يتم اختيار حلقة",
       "toast.list_failed": "فشل تحديث قائمتي",
       "toast.reset_done": "تم إعادة تعيين الإعدادات",
+      "toast.failed_reset": "فشل إعادة تعيين الإعدادات",
+      "update.available": "أنت تستخدم الإصدار {cur} — الإصدار {latest} متاح.",
+      "cat.sub": "ترجمة", "cat.dub": "دبلجة", "cat.ar_sub": "ترجمة عربية",
       "auto_skip.on": "التخطي التلقائي: مفعّل", "auto_skip.off": "التخطي التلقائي: معطّل",
       "schedule.upcoming": "قادم هذا الأسبوع",
       "schedule.upcoming_day": "قادم · {day}",
       "episodes.count": "{n} حلقة",
       "days.sun": "الأحد", "days.mon": "الإثنين", "days.tue": "الثلاثاء", "days.wed": "الأربعاء",
       "days.thu": "الخميس", "days.fri": "الجمعة", "days.sat": "السبت",
-      "badge.featured": "مميز", "badge.trending": "رائج", "badge.free": "مجاني",
-      "badge.sources": "{n} مصادر", "badge.source": "مصدر واحد",
-      "badge.tv": "مسلسل", "badge.movie": "فيلم", "badge.ova": "OVA", "badge.special": "خاص",
-      "action.watch_free": "▶ شاهد مجاناً"
-    }
-  };
+       "badge.featured": "مميز", "badge.trending": "رائج", "badge.free": "مجاني",
+       "badge.sources": "{n} مصادر", "badge.source": "مصدر واحد",
+       "badge.tv": "مسلسل", "badge.movie": "فيلم", "badge.ova": "OVA", "badge.special": "خاص",
+       "action.watch_free": "▶ شاهد مجاناً",
+       "details.panel_title": "التفاصيل",
+       "details.genres_label": "التصنيفات",
+       "details.status_label": "الحالة",
+       "details.status_ongoing": "مستمر",
+       "details.status_completed": "مكتمل",
+       "details.duration_format": "~{min} دقيقة/حلقة",
+       "details.episodes_format": "{n} حلقات",
+       "details.my_list_btn": "قائمتي +",
+       "details.watch_together_btn": "شاهد معاً",
+       "details.resume": "متابعة",
+       "details.continue": "متابعة",
+       "continue.episode": "الحلقة {n}",
+       "genres.supernatural": "خارق للطبيعة",
+       "genres.adventure": "مغامرة",
+       "genres.action": "أكشن",
+       "genres.comedy": "كوميديا",
+       "genres.drama": "دراما",
+       "genres.sci_fi": "خيال علمي",
+       "genres.romance": "رومانسي",
+       "genres.fantasy": "خيال",
+       "genres.slice_of_life": "شريحة من الحياة",
+       "genres.mystery": "غموض",
+       "genres.horror": "رعب",
+       "genres.thriller": "إثارة",
+       "genres.sports": "رياضة",
+       "genres.music": "موسيقى",
+       "episode.search_placeholder": "ابحث عن رقم الحلقة...",
+       "schedule.airing_now": "يُبث الآن",
+       "schedule.in_days": "خلال {n} يوم",
+       "schedule.in_hours": "خلال {h}س {m}د",
+       "schedule.in_minutes": "خلال {m}د",
+       "bookmark.add": "أضف إلى قائمتي",
+       "bookmark.remove": "أزل من قائمتي",
+       "bookmark.in_list": "في قائمتي",
+       "bookmark.my_list": "قائمتي +",
+       "toast.added_list": "تمت الإضافة إلى قائمتي",
+       "toast.removed_list": "تمت الإزالة من قائمتي",
+       "episode.label": "الحلقة {n}",
+       "episode.ep_short": "ح {n}",
+       "playback.resolving": "جاري حل البث للحلقة {n} باستخدام {player}…",
+       "playback.playing": "التشغيل بـ {player}",
+       "playback.failed": "فشل التشغيل",
+        "wt.failed_host": "فشل إنشاء الغرفة",
+        "wt.failed_join": "فشل الانضمام للغرفة",
+       "wt.room_hosted": "تم إنشاء الغرفة! الرمز: {code}",
+       "wt.joined_room": "تم الدخول للغرفة {code}",
+        "wt.enter_code": "أدخل رمز الغرفة (6 أرقام):",
+        "search.no_results": "لا توجد نتائج. جرّب عنوانًا آخر.",
+        "schedule.empty_day": "لا توجد إصدارات مجدولة لهذا اليوم.",
+        "wt.host_label": "المضيف",
+        "wt.guest_label": "الزائر"
+     }
+   };
+
+   // Genre mapping EN → AR
+   const GENRE_TRANSLATIONS = {
+     "supernatural": "genres.supernatural",
+     "adventure": "genres.adventure",
+     "action": "genres.action",
+     "comedy": "genres.comedy",
+     "drama": "genres.drama",
+     "sci-fi": "genres.sci_fi",
+     "science fiction": "genres.sci_fi",
+     "romance": "genres.romance",
+     "fantasy": "genres.fantasy",
+     "slice of life": "genres.slice_of_life",
+     "mystery": "genres.mystery",
+     "horror": "genres.horror",
+     "thriller": "genres.thriller",
+     "sports": "genres.sports",
+     "music": "genres.music"
+   };
+
+   function localizeGenre(genreName) {
+     if (!genreName || currentLang !== "ar") return genreName;
+     const normalized = String(genreName).toLowerCase().trim();
+     const key = GENRE_TRANSLATIONS[normalized];
+     return key ? t(key) : genreName;
+   }
 
   // ---------- Anime Title Mapping (EN → AR) ----------
   const ANIME_TITLES_AR = {
     "naruto": "ناروتو",
-    "naruto shippuden": "ناروتو شيبودن",
-    "naruto shippuuden": "ناروتو شيبودن",
-    "bleach": "بليتش",
-    "dragon ball": "دراغون بول",
-    "dragon ball z": "دراغون بول زد",
-    "dragon ball super": "دراغون بول سوبر",
-    "one piece": "ون بيس",
-    "attack on titan": "هجوم العمالقة",
-    "shingeki no kyojin": "هجوم العمالقة",
-    "death note": "مذكرة الموت",
-    "fullmetal alchemist": "الخيميائي المعدني الكامل",
-    "fullmetal alchemist: brotherhood": "الخيميائي المعدني الكامل: الأخوية",
-    "demon slayer": "قاتل الشياطين",
-    "kimetsu no yaiba": "قاتل الشياطين",
-    "my hero academia": "أكاديميتي للأبطال",
-    "boku no hero academia": "أكاديميتي للأبطال",
-    "sword art online": "سورد آرت أونلاين",
-    "tokyo ghoul": "طوكيو غول",
-    "hunter x hunter": "هنتر × هنتر",
-    "jujutsu kaisen": "جوجوتسو كايسن",
-    "spy x family": "سباي × فاميلي",
-    "chainsaw man": "رجل المنشار",
-    "steins gate": "ستاينز جيت",
-    "steins;gate": "ستاينز جيت",
-    "code geass": "كود غياس",
-    "cowboy bebop": "كاوبوي بيبوب",
-    "one punch man": "ون بنش مان",
-    "mob psycho 100": "موب سايكو 100",
-    "haikyuu": "هايكيو",
-    "kuroko no basket": "كوروكو نو باسكت",
-    "fairy tail": "ذيل الجنية",
-    "black clover": "البرسيم الأسود",
-    "fire force": "قوة النار",
-    "grand blue": "جراند بلو",
-    "grand blue dreaming": "جراند بلو دريمنغ",
-    "gintama": "غينتاما",
-    "fruits basket": "سلة الفواكه",
-    "your name": "اسمك",
-    "kimi no na wa": "اسمك",
-    "spirited away": "المخطوفة",
-    "weathering with you": "طقس معك",
-    "tenki no ko": "طقس معك",
-    "violet evergarden": "فايلت إيفرغاردن",
-    "the promised neverland": "نيفرلاند الموعودة",
-    "yakusoku no neverland": "نيفرلاند الموعودة",
-    "parasyte": "الطفيلي",
-    "kiseijuu": "الطفيلي",
-    "classroom of the elite": "صف النخبة",
-    "youkoso jitsuryoku": "صف النخبة",
-    "re:zero": "ري: زيرو",
-    "konosuba": "كونوسوبا",
-    "overlord": "أوفرلورد",
-    "no game no life": "لا لعبة لا حياة",
-    "the rising of the shield hero": "نهوض بطل الدرع",
-    "tate no yuusha": "نهوض بطل الدرع",
-    "vinland saga": "ملحمة فينلاند",
-    "made in abyss": "صُنع في الهاوية",
-    "goblin slayer": "قاتل الغوبلن",
-    "dr. stone": "دكتور ستون",
-    "that time i got reincarnated as a slime": "ذلك الوقت الذي تجسدت فيه كوحل",
-    "tensei shitara slime": "ذلك الوقت الذي تجسدت فيه كوحل",
-    "mushoku tensei": "موشوكو تنسي",
-    "jobless reincarnation": "موشوكو تنسي",
-    "solo leveling": "سولو ليفلنغ",
-    "horimiya": "هوريميا",
-    "kaguya-sama": "كاغويا-ساما",
-    "toradora": "تورادورا",
-    "clannad": "كلاناد",
-    "angel beats": "أنجل بيتس",
-    "your lie in april": "كذبتك في أبريل",
-    "shigatsu wa kimi no uso": "كذبتك في أبريل",
-    "anohana": "أنوهانا",
-    "a silent voice": "صوت صامت",
-    "koe no katachi": "صوت صامت",
-    "erased": "محو",
-    "boku dake ga inai machi": "محو",
-    "code:breaker": "كود: بريكر",
-    "akame ga kill": "أكامي غا كيل",
-    "blue exorcist": "المُطهّر الأزرق",
-    "ao no exorcist": "المُطهّر الأزرق",
-    "noragami": "نوراغامي",
-    "magi": "ماجي",
-    "soul eater": "سول إيتر",
-    "durarara": "دورارارا",
-    "baccano": "باكانو",
-    "black lagoon": "البحيرة السوداء",
-    "hellsing": "هيلسنج",
-    "trigun": "ترايغن",
-    "samurai champloo": "ساموراي تشامبلو",
-    "fate/zero": "فيت/زيرو",
-    "fate/stay night": "فيت/ستاي نايت",
-    "monogatari": "موناغاتاري",
-    "bakemonogatari": "باكيموناغاتاري"
-  };
+     "naruto shippuden": "ناروتو شيبودن",
+     "naruto shippuuden": "ناروتو شيبودن",
+     "bleach": "بليتش",
+     "dragon ball": "دراغون بول",
+     "dragon ball z": "دراغون بول زد",
+     "dragon ball super": "دراغون بول سوبر",
+     "one piece": "ون بيس",
+     "attack on titan": "هجوم العمالقة",
+     "shingeki no kyojin": "هجوم العمالقة",
+     "death note": "مذكرة الموت",
+     "fullmetal alchemist": "الخيميائي المعدني الكامل",
+     "fullmetal alchemist: brotherhood": "الخيميائي المعدني الكامل: الأخوية",
+     "demon slayer": "قاتل الشياطين",
+     "kimetsu no yaiba": "قاتل الشياطين",
+     "my hero academia": "أكاديميتي للأبطال",
+     "boku no hero academia": "أكاديميتي للأبطال",
+     "sword art online": "سورد آرت أونلاين",
+     "tokyo ghoul": "طوكيو غول",
+     "hunter x hunter": "هنتر × هنتر",
+     "jujutsu kaisen": "جوجوتسو كايسن",
+     "spy x family": "سباي × فاميلي",
+     "chainsaw man": "رجل المنشار",
+     "steins gate": "ستاينز جيت",
+     "steins;gate": "ستاينز جيت",
+     "code geass": "كود غياس",
+     "cowboy bebop": "كاوبوي بيبوب",
+     "one punch man": "ون بنش مان",
+     "mob psycho 100": "موب سايكو 100",
+     "haikyuu": "هايكيو",
+     "kuroko no basket": "كوروكو نو باسكت",
+     "fairy tail": "ذيل الجنية",
+     "black clover": "البرسيم الأسود",
+     "fire force": "قوة النار",
+     "grand blue": "جراند بلو",
+     "grand blue dreaming": "جراند بلو دريمنغ",
+     "gintama": "غينتاما",
+     "fruits basket": "سلة الفواكه",
+     "your name": "اسمك",
+     "kimi no na wa": "اسمك",
+     "spirited away": "المخطوفة",
+     "weathering with you": "طقس معك",
+     "tenki no ko": "طقس معك",
+     "violet evergarden": "فايلت إيفرغاردن",
+     "the promised neverland": "نيفرلاند الموعودة",
+     "yakusoku no neverland": "نيفرلاند الموعودة",
+     "parasyte": "الطفيلي",
+     "kiseijuu": "الطفيلي",
+     "classroom of the elite": "صف النخبة",
+     "youkoso jitsuryoku": "صف النخبة",
+     "re:zero": "ري: زيرو",
+     "konosuba": "كونوسوبا",
+     "overlord": "أوفرلورد",
+     "no game no life": "لا لعبة لا حياة",
+     "the rising of the shield hero": "نهوض بطل الدرع",
+     "tate no yuusha": "نهوض بطل الدرع",
+     "vinland saga": "ملحمة فينلاند",
+     "made in abyss": "صُنع في الهاوية",
+     "goblin slayer": "قاتل الغوبلن",
+     "dr. stone": "دكتور ستون",
+     "that time i got reincarnated as a slime": "ذلك الوقت الذي تجسدت فيه كوحل",
+     "tensei shitara slime": "ذلك الوقت الذي تجسدت فيه كوحل",
+     "mushoku tensei": "موشوكو تنسي",
+     "jobless reincarnation": "موشوكو تنسي",
+     "solo leveling": "سولو ليفلنغ",
+     "horimiya": "هوريميا",
+     "kaguya-sama": "كاغويا-ساما",
+     "toradora": "تورادورا",
+     "clannad": "كلاناد",
+     "angel beats": "أنجل بيتس",
+     "your lie in april": "كذبتك في أبريل",
+     "shigatsu wa kimi no uso": "كذبتك في أبريل",
+     "anohana": "أنوهانا",
+     "a silent voice": "صوت صامت",
+     "koe no katachi": "صوت صامت",
+     "erased": "محو",
+     "boku dake ga inai machi": "محو",
+     "code:breaker": "كود: بريكر",
+     "akame ga kill": "أكامي غا كيل",
+     "blue exorcist": "المُطهّر الأزرق",
+     "ao no exorcist": "المُطهّر الأزرق",
+     "noragami": "نوراغامي",
+     "magi": "ماجي",
+     "soul eater": "سول إيتر",
+     "durarara": "دورارارا",
+     "baccano": "باكانو",
+     "black lagoon": "البحيرة السوداء",
+     "hellsing": "هيلسنج",
+     "trigun": "ترايغن",
+     "samurai champloo": "ساموراي تشامبلو",
+     "fate/zero": "فيت/زيرو",
+     "fate/stay night": "فيت/ستاي نايت",
+     "monogatari": "موناغاتاري",
+     "bakemonogatari": "باكيموناغاتاري",
+     "blue lock": "بلو لوك",
+     "the ghost in the shell": "شبح الصدفة",
+     "ghost in the shell": "شبح الصدفة",
+     "cyberpunk: edgerunners": "سايبربانك: إيدجرانرز",
+     "love is war": "كاغويا-ساما: حب الحرب",
+     "i want to love you": "أريد أن أحبك",
+     "young ladies don't": "الفتيات الصغيرات لا يفعلن",
+     "girls don't": "الفتيات لا يفعلن",
+     "the testament of sister new devil": "وصية أخت الشيطان الجديدة",
+     "sister devil": "وصية أخت الشيطان الجديدة",
+     "high school dxd": "مدرسة إسطنبول الثانوية",
+     "food wars": "حروب الطعام",
+     "shokugeki no soma": "حروب الطعام",
+     "kill la kill": "اقتل كيل",
+     "nana": "نانا",
+     "puella magi madoka magica": "بويلا ماجي مادوكا ماجيكا",
+     "madoka magica": "بويلا ماجي مادوكا ماجيكا",
+     "card captor sakura": "ساحرة الأوراق ساكورا",
+     "cardcaptor sakura": "ساحرة الأوراق ساكورا",
+     "inuyasha": "إينويشا",
+     "rurouni kenshin": "روروني كينشن",
+     "samurai x": "روروني كينشن",
+     "sailor moon": "فتاة القمر",
+     "neon genesis evangelion": "نيون جينيسيس إيفانجيليون",
+     "evangelion": "إيفانجيليون",
+     "lain": "لين",
+     "serial experiments lain": "تجارب سيرية لين",
+     "ghost hunt": "صيادو الأشباح",
+     "xxxholic": "إكس إكس إكس هوليك",
+     "tsubasa": "تسوباسا",
+     "tsubasa reservoir chronicle": "تسوباسا",
+     "another": "آخر",
+     "dusk maiden of amnesia": "شاة العتمة فاقدة الذاكرة",
+     "corpse party": "حفلة الجثث",
+     "school-live": "مدرسة حية",
+     "gakkougurashi": "مدرسة حية",
+     "future diary": "يوميات المستقبل",
+     "mirai nikki": "يوميات المستقبل",
+     "psycho-pass": "نفسي باص",
+     "darker than black": "أسود من الأسود",
+     "black bullet": "رصاصة سوداء",
+     "highschool of the dead": "ثانوية الموتى",
+     "blood lad": "فتى الدم",
+     "strike the blood": "اضرب الدم",
+     "seraph of the end": "الملاك الأخير",
+     "owari no seraph": "الملاك الأخير",
+     "tokyo esp": "طوكيو إيسبي",
+     "angel beats": "أنجل بيتس",
+     "charlotte": "تشارلوت",
+     "little busters": "الأولاد الصغار",
+     "kanon": "كانون",
+     "air": "هواء",
+     "fate/stay night: unlimited blade works": "فيت/ستاي نايت: سيف الحب اللانهائي",
+     "unlimited blade works": "سيف الحب اللانهائي",
+     "vanitas no carte": "خريطة فانيتاس",
+     "dance dance danseur": "الرقص الرقص الراقص",
+     "kaguya-sama: love is war": "كاغويا-ساما: حب الحرب"
+   };
 
-  function localizeAnimeTitle(title) {
-    if (currentLang !== "ar" || !title) return title;
-    const normalized = String(title).toLowerCase().trim();
-    return ANIME_TITLES_AR[normalized] || title;
-  }
+   function localizeAnimeTitle(title, animeObj) {
+     if (currentLang !== "ar" || !title) return title;
+     
+     const normalized = String(title).toLowerCase().trim();
+     
+     if (ANIME_TITLES_AR[normalized]) {
+       return ANIME_TITLES_AR[normalized];
+     }
+     
+     if (animeObj && animeObj.title_arabic) {
+       return animeObj.title_arabic;
+     }
+     
+     if (animeObj && animeObj.native) {
+       return animeObj.native;
+     }
+     
+     return title;
+   }
 
   let currentLang = "en";
   try { currentLang = localStorage.getItem("aninova-lang") || "en"; } catch(e) {}
@@ -2647,7 +2852,7 @@
         toast(t("toast.settings_saved"));
         closeSettings();
       } else {
-        toast((res && res.error) || "Failed to save settings", true);
+        toast((res && res.error) || t("toast.failed_save"), true);
       }
     } catch (e) { toast(String(e), true); }
   }
@@ -2665,7 +2870,7 @@
         refreshAutoSkip();
         toast(t("toast.reset_done"));
       } else {
-        toast((res && res.error) || "Failed to reset settings", true);
+        toast((res && res.error) || t("toast.failed_reset"), true);
       }
     } catch (e) { toast(String(e), true); }
   }
@@ -2795,7 +3000,7 @@
     }
     const cur = state.current || "";
     const latest = state.latest || "";
-    $("#updateText").textContent = `You're on v${cur} — v${latest} is available.`;
+    $("#updateText").textContent = t("update.available", {cur: cur, latest: latest});
     banner.classList.add("show");
   }
   window.addEventListener("update-checked", (e) => renderUpdateBanner(e.detail), { once: false });
@@ -3014,7 +3219,7 @@
         : '<span class="sr-thumb ph">◆</span>';
       const year = r.year ? `<span class="sr-year">${esc(r.year)}</span>` : "";
       const srcs = (r.providers && r.providers.length)
-        ? `<span class="chip ghost">${esc(r.providers.length)} sources</span>`
+        ? `<span class="chip ghost">${esc(t(r.providers.length === 1 ? "badge.source" : "badge.sources", {n: r.providers.length}))}</span>`
         : `<span class="chip ghost">${esc(r.provider || "miruro")}</span>`;
       row.innerHTML = `${thumb}<span class="sr-info"><span class="sr-title">${esc(r.title)}</span><span class="sr-meta">${year}<span class="chip sub">SUB</span>${srcs}</span></span>`;
       row.addEventListener("click", () => { closeSearchDrop(); openDetails(r); });
@@ -3039,7 +3244,7 @@
       renderSearchDrop(results);
     } catch (e) {
       if (lastDropQuery !== q.toLowerCase()) return;
-      searchDropList.innerHTML = '<div class="search-drop-empty">Search failed</div>';
+      searchDropList.innerHTML = `<div class="search-drop-empty">${t("toast.search_failed")}</div>`;
     }
   }
 
@@ -3075,7 +3280,7 @@
 
   function renderGrid(results) {
     if (!results || !results.length) {
-      grid.innerHTML = '<div class="empty">No results. Try another title.</div>';
+      grid.innerHTML = `<div class="empty">${t("search.no_results")}</div>`;
       return;
     }
     grid.innerHTML = "";
@@ -3209,7 +3414,7 @@
     const strip = $("#scheduleStrip");
     strip.innerHTML = "";
     if (!items.length) {
-      strip.innerHTML = '<div class="schedule-empty">No releases scheduled for this day.</div>';
+      strip.innerHTML = `<div class="schedule-empty">${t("schedule.empty_day")}</div>`;
       return;
     }
     for (const r of items.slice(0, 16)) strip.appendChild(scheduleCard(r));
@@ -3242,18 +3447,18 @@
 
   function fmtAir(r) {
     const sec = (r && r.in != null) ? r.in : 0;
-    if (sec <= 60) return "Airing now";
+    if (sec <= 60) return t("schedule.airing_now");
     const h = Math.floor(sec / 3600);
     const m = Math.floor((sec % 3600) / 60);
-    if (h >= 48) return `in ${Math.floor(h / 24)}d`;
-    if (h >= 1) return `in ${h}h ${m}m`;
-    return `in ${m}m`;
+    if (h >= 48) return t("schedule.in_days", {n: Math.floor(h / 24)});
+    if (h >= 1) return t("schedule.in_hours", {h: h, m: m});
+    return t("schedule.in_minutes", {m: m});
   }
 
   // ---------- home: top 10 sidebar ----------
   async function loadTop10() {
     const list = $("#top10List");
-    list.innerHTML = '<div class="schedule-empty">Loading…</div>';
+    list.innerHTML = `<div class="schedule-empty">${t("details.loading")}</div>`;
     try {
       const api = await getApi();
       const items = ((await api.get_trending(12)) || []).slice(0, 10);
@@ -3261,28 +3466,28 @@
       list.innerHTML = "";
       items.forEach((r, i) => {
         const m = metas[i] || {};
-        const sub = [
-          m.episodes ? `${m.episodes} eps` : "",
-          m.score != null ? `${m.score}/10` : "",
-        ].filter(Boolean).join(" · ");
+        const epsText = m.episodes ? t("episodes.count", {n: m.episodes}) : "";
+        const scoreText = m.score != null ? `${m.score}/10` : "";
+        const sub = [epsText, scoreText].filter(Boolean).join(" · ");
         const thumb = r.poster
           ? `<img class="thumb" src="${r.poster}" alt="" referrerpolicy="no-referrer" onerror="this.outerHTML='<span class=thumb.ph>◆</span>'" />`
           : '<span class="thumb ph">◆</span>';
         const row = document.createElement("button");
         row.className = "top10-row";
+        const displayTitle = localizeAnimeTitle(m.title || r.title, m);
         row.innerHTML = `
           <span class="rank">${i + 1}</span>
           <span class="trend ${i < 3 ? "hot" : ""}">▲</span>
           ${thumb}
           <span class="info">
-            <span class="name">${esc(m.title || r.title)}</span>
+            <span class="name">${esc(displayTitle)}</span>
             <span class="sub">${esc(sub)}</span>
           </span>`;
         row.addEventListener("click", () => openDetails(r));
         list.appendChild(row);
       });
     } catch (e) {
-      list.innerHTML = '<div class="schedule-empty">Trending unavailable.</div>';
+      list.innerHTML = `<div class="schedule-empty">${t("details.no_details")}</div>`;
     }
   }
 
@@ -3319,7 +3524,7 @@
       </div>
       <div class="meta">
         <div class="title">${esc(displayTitle)}</div>
-        <div class="provider">${r.progress != null ? `${pct}% · Ep ${esc(String(r.episode))}` : `Resume · Ep ${esc(String(r.episode))}`}</div>
+        <div class="provider">${r.progress != null ? `${pct}% · ${t("continue.episode", {n: esc(String(r.episode))})}` : `${t("details.resume")} · ${t("continue.episode", {n: esc(String(r.episode))})}`}</div>
       </div>`;
     attachHoverMeta(card, r);
     const anime = { id: r.anime_id, title: r.title, poster: r.poster, provider: "trending" };
@@ -3346,13 +3551,13 @@
       const api = await getApi();
       const state = await api.toggle_bookmark(String(aid), title || "", poster || "", year || null);
       if (state) bookmarkedIds.add(String(aid)); else bookmarkedIds.delete(String(aid));
-      document.querySelectorAll(`.bookmark-ic[data-aid="${String(aid)}"]`).forEach(b => {
-        b.classList.toggle("active", state);
-      });
-      syncDetailsBookmark();
-      loadMyList();
-      toast(state ? "Added to My List" : "Removed from My List");
-      return state;
+       document.querySelectorAll(`.bookmark-ic[data-aid="${String(aid)}"]`).forEach(b => {
+         b.classList.toggle("active", state);
+       });
+       syncDetailsBookmark();
+       loadMyList();
+       toast(state ? t("toast.added_list") : t("toast.removed_list"));
+       return state;
     } catch (e) {
       toast(t("toast.list_failed"), true);
       return false;
@@ -3361,7 +3566,8 @@
   function bookmarkButtonFor(r) {
     const id = String((r && (r.id !== undefined ? r.id : r.anime_id)) || "");
     if (!id) return "";
-    return `<button class="bookmark-ic ${bookmarkedIds.has(id) ? "active" : ""}" data-aid="${id}" title="Add to My List">▱</button>`;
+    const title = bookmarkedIds.has(id) ? t("bookmark.remove") : t("bookmark.add");
+    return `<button class="bookmark-ic ${bookmarkedIds.has(id) ? "active" : ""}" data-aid="${id}" title="${title}">▱</button>`;
   }
   function bindCardBookmark(card, r) {
     const id = String((r && (r.id !== undefined ? r.id : r.anime_id)) || "");
@@ -3379,7 +3585,7 @@
     const active = bookmarkedIds.has(String(current.id));
     bbm.classList.toggle("active", active);
     const lbl = bbm.querySelector(".bm-label");
-    if (lbl) lbl.textContent = active ? "In My List" : "My List";
+    if (lbl) lbl.textContent = active ? t("bookmark.in_list") : t("bookmark.my_list");
   }
   async function loadMyList() {
     const wrap = $("#myListWrap");
@@ -3401,16 +3607,18 @@
     const poster = r.poster
       ? `<img class="poster" src="${r.poster}" alt="" referrerpolicy="no-referrer" onerror="this.outerHTML='<div class=poster.ph>◆</div>'" />`
       : '<div class="poster ph">◆</div>';
-    const displayTitle = localizeAnimeTitle(r.title);
+    const displayTitle = localizeAnimeTitle(r.title, r);
+    const removeTitle = t("bookmark.remove");
+    const listLabel = t("home.my_list");
     card.innerHTML = `
       <div class="poster-wrap">
         ${poster}
-        <button class="bookmark-ic active" data-aid="${esc(String(r.anime_id))}" title="Remove from My List">▱</button>
+        <button class="bookmark-ic active" data-aid="${esc(String(r.anime_id))}" title="${removeTitle}">▱</button>
         <div class="hover-card"></div>
       </div>
       <div class="meta">
         <div class="title">${esc(displayTitle)}</div>
-        <div class="provider">${r.year ? esc(String(r.year)) : "My List"}</div>
+        <div class="provider">${r.year ? esc(String(r.year)) : listLabel}</div>
       </div>`;
     attachHoverMeta(card, r);
     const bm = card.querySelector(".bookmark-ic");
@@ -3465,7 +3673,7 @@
   }
 
   function setHeroLoading() {
-    $("#detTitle").textContent = current ? current.title : "";
+    $("#detTitle").textContent = current ? localizeAnimeTitle(current.title, current) : "";
     $("#detAltTitles").textContent = t("details.loading");
     $("#detScore").textContent = "…";
     $("#detPills").innerHTML = "";
@@ -3479,7 +3687,7 @@
     } else {
       $("#backdrop").style.backgroundImage = "none";
     }
-    $("#epList").innerHTML = '<div class="ep-empty">Loading episodes…</div>';
+    $("#epList").innerHTML = `<div class="ep-empty">${t("details.loading_episodes")}</div>`;
     $("#epDetailTitle").textContent = t("details.select_episode");
     $("#epDetailSub").textContent = "";
   }
@@ -3488,7 +3696,7 @@
     if (!details) return;
 
     const title = details.title || current.title;
-    const displayTitle = localizeAnimeTitle(title);
+    const displayTitle = localizeAnimeTitle(title, details);
     $("#detTitle").textContent = displayTitle;
     $("#crumbs").textContent = `${details.type || ""} · ${details.premiered || ""}`
       .replace(/^\s*·\s*/, "").replace(/\s*·\s*$/, "").replace(/\s*·\s*/g, " · ") || displayTitle;
@@ -3503,27 +3711,35 @@
     const pills = [];
     if (details.type) pills.push([details.type, ""]);
     if (details.premiered) pills.push([details.premiered, ""]);
-    if (details.duration) pills.push([`~${details.duration} min/ep`, ""]);
+    if (details.duration) {
+      const durationText = t("details.duration_format", {min: details.duration});
+      pills.push([durationText, ""]);
+    }
     const epsTotal = Array.isArray(details.episodes)
       ? details.episodes.length
       : (details.episodes_count || details.total_episodes || (typeof details.episodes === "number" ? details.episodes : "?"));
-    pills.push([`${epsTotal} eps`, ""]);
+    const epsText = t("details.episodes_format", {n: epsTotal});
+    pills.push([epsText, ""]);
+    
     if (details.status) {
+      let statusText = details.status;
+      if (details.status.toLowerCase() === "airing") statusText = t("details.status_ongoing");
+      else if (details.status.toLowerCase() === "completed") statusText = t("details.status_completed");
       const cls = details.status === "Airing" ? "style='background:rgba(47,208,123,.15);border-color:rgba(47,208,123,.5);color:#7ce8b3'" : "";
-      pills.push([details.status, cls]);
+      pills.push([statusText, cls]);
     }
     if (Array.isArray(details.studio)) {
       if (details.studio.length) pills.push([details.studio.join(", "), ""]);
     } else if (details.studio) {
       pills.push([details.studio, ""]);
     }
-    $("#detPills").innerHTML = pills.map(([t, extra]) =>
-      `<span class="pill" ${extra}>${esc(t)}</span>`).join("");
+    $("#detPills").innerHTML = pills.map(([text, extra]) =>
+      `<span class="pill" ${extra}>${esc(text)}</span>`).join("");
 
     $("#detGenres").innerHTML = (Array.isArray(details.genres) ? details.genres : [])
-      .map(g => `<span class="pill">${esc(g)}</span>`).join("");
+      .map(g => `<span class="pill">${esc(localizeGenre(g))}</span>`).join("");
 
-    const syn = details.description || "No synopsis available.";
+    const syn = details.description || t("details.no_synopsis");
     $("#detSynopsis").textContent = syn;
     $("#synToggle").textContent = t("details.show_more");
     $("#synToggle").style.display = syn.length > 230 ? "inline-block" : "none";
@@ -3552,17 +3768,17 @@
       selectEpisode(episodes[0], false);
       $("#epSearch").value = "";
     } else {
-      $("#epList").innerHTML = '<div class="ep-empty">No episodes available on this server.</div>';
+      $("#epList").innerHTML = `<div class="ep-empty">${t("details.no_episodes_server")}</div>`;
       $("#epDetailTitle").textContent = t("details.no_episodes");
-      $("#epDetailSub").textContent = "Try a different server or audio track.";
+      $("#epDetailSub").textContent = t("details.no_episodes_filter");
     }
   }
 
   function renderServerBar(providers) {
     $("#catGroup").innerHTML = [
-      ["sub", "Sub", "SUB"],
-      ["dub", "Dub", "DUB"],
-      ["ar_sub", "Arabic Sub", "AR SUB"],
+      ["sub", t("cat.sub"), "SUB"],
+      ["dub", t("cat.dub"), "DUB"],
+      ["ar_sub", t("cat.ar_sub"), "AR SUB"],
     ].map(([val, label, abbr]) =>
       `<button class="cat-pill ${category === val ? "active" : ""}" data-cat="${val}" title="${label}">${abbr}</button>`
     ).join("");
@@ -3602,7 +3818,7 @@
   async function reloadEpisodes() {
     if (!current) return;
     const token = detailsToken;
-    $("#epList").innerHTML = '<div class="ep-empty">Loading episodes…</div>';
+    $("#epList").innerHTML = `<div class="ep-empty">${t("details.loading_episodes")}</div>`;
     try {
       const api = await getApi();
       const full = await api.get_anime_details(current.id, provider, category);
@@ -3612,7 +3828,7 @@
       renderDetails();
     } catch (e) {
       if (token !== detailsToken) return;
-      $("#epList").innerHTML = '<div class="ep-empty">Failed to load episodes</div>';
+      $("#epList").innerHTML = `<div class="ep-empty">${t("details.failed_episodes")}</div>`;
       toast(String(e), true);
     }
   }
@@ -3633,8 +3849,10 @@
       row.className = "ep-row";
       if (selectedEp && selectedEp.episode_num === ep.episode_num) row.classList.add("active");
       row.dataset.ep = ep.episode_num;
-      row.innerHTML = `<span class="num">${fmtEp(ep.episode_num)}</span><span class="name">${isFrac ? `Episode ${fmtEp(ep.episode_num)}` : `Episode ${mol}`}</span>`;
-      row.title = isFrac ? `Episode ${fmtEp(ep.episode_num)}` : `Episode ${mol}`;
+      const epLabel = t("episode.label", {n: fmtEp(ep.episode_num)});
+      const epLabelShort = isFrac ? t("episode.label", {n: fmtEp(ep.episode_num)}) : t("episode.label", {n: mol});
+      row.innerHTML = `<span class="num">${fmtEp(ep.episode_num)}</span><span class="name">${epLabelShort}</span>`;
+      row.title = epLabel;
       row.addEventListener("click", () => {
         const real = episodes.find(e => e.episode_num === ep.episode_num);
         selectEpisode(real || ep, true);
@@ -3642,14 +3860,14 @@
       $("#epList").appendChild(row);
     }
     if (!$("#epList").children.length) {
-      $("#epList").innerHTML = '<div class="ep-empty">No episodes match the filter.</div>';
+      $("#epList").innerHTML = `<div class="ep-empty">${t("details.no_episodes_filter")}</div>`;
     }
   }
 
   function selectEpisode(ep, scroll = true) {
     if (!ep) return;
     selectedEp = ep;
-    $("#epDetailTitle").textContent = `Episode ${fmtEp(ep.episode_num)}`;
+    $("#epDetailTitle").textContent = t("episode.label", {n: fmtEp(ep.episode_num)});
     $("#epDetailSub").textContent = `${cap(provider || ep.provider || "")} · ${catLabel(category)} · ${cap(current.title)}`;
     const rows = document.querySelectorAll(".ep-row");
     rows.forEach(r => r.classList.toggle("active", Number(r.dataset.ep) === ep.episode_num));
@@ -3664,7 +3882,7 @@
     if (!ep) return toast(t("toast.no_episode"), true);
     const player = $("#playerSel").value;
     const resolution = $("#resSel").value || "auto";
-    toast(`Resolving stream for Ep ${fmtEp(ep.episode_num)} with ${player.toUpperCase()}…`);
+    toast(t("playback.resolving", {n: fmtEp(ep.episode_num), player: player.toUpperCase()}));
     try {
       const api = await getApi();
       await waitPreroll();
@@ -3673,9 +3891,9 @@
       );
       loadContinue();
       if (res && res.ok) {
-        toast(`Playing with ${(res.player || player).toUpperCase()}`);
+        toast(t("playback.playing", {player: (res.player || player).toUpperCase()}));
       } else {
-        toast((res && res.error) || "Playback failed", true);
+        toast((res && res.error) || t("playback.failed"), true);
       }
     } catch (e) {
       toast(String(e), true);
@@ -3798,7 +4016,7 @@
       const row = document.createElement("div");
       row.className = "wt-member" + (isHost ? " host" : "");
       row.innerHTML = `<span class="dot"></span><span class="name">${esc(cap(m.name))}</span>` +
-        `<span class="role ${isHost ? "host" : "guest"}">${isHost ? "Host" : "Guest"}</span>`;
+        `<span class="role ${isHost ? "host" : "guest"}">${isHost ? t("wt.host_label") : t("wt.guest_label")}</span>`;
       list.appendChild(row);
     }
   }
@@ -3818,21 +4036,21 @@
     try {
       const api = await getApi();
       const r = await api.host_room(player);
-      if (r && r.ok) toast(`Room hosted! Code: ${r.code}`);
-      else toast((r && r.error) || "Failed to host room", true);
+      if (r && r.ok) toast(t("wt.room_hosted", {code: r.code}));
+      else toast((r && r.error) || t("wt.failed_host"), true);
     } catch (e) { toast(String(e), true); }
     refreshWt();
   }
 
   async function doJoin() {
-    const code = prompt("Enter 6-digit room code:");
+    const code = prompt(t("wt.enter_code"));
     if (!code) return;
     const player = $("#playerSel").value;
     try {
       const api = await getApi();
       const r = await api.join_room(code, player);
-      if (r && r.ok) toast(`Joined room ${r.code}`);
-      else toast((r && r.error) || "Failed to join room", true);
+      if (r && r.ok) toast(t("wt.joined_room", {code: r.code}));
+      else toast((r && r.error) || t("wt.failed_join"), true);
     } catch (e) { toast(String(e), true); }
     refreshWt();
   }
