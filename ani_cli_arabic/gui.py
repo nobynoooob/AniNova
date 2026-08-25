@@ -2747,6 +2747,25 @@ def run_gui(debug: bool = False) -> None:
     except Exception:
         pass
 
+    # Browser launch problems that need USER ACTION (Linux missing system
+    # libraries) surface as an error toast via the frontend's own toast().
+    try:
+        from .scrapers._browser import set_launch_problem_listener
+        def _on_browser_problem(message: str):
+            try:
+                import webview as _wv
+                safe = str(message).replace("\\", "\\\\").replace('"', '\\"')
+                for win in getattr(_wv, "windows", []) or []:
+                    if win and getattr(win, "loaded", False):
+                        win.evaluate_js(
+                            f'window.toast && window.toast("{safe}", true);'
+                        )
+            except Exception:
+                pass
+        set_launch_problem_listener(_on_browser_problem)
+    except Exception:
+        pass
+
     window = webview.create_window(
         f"AniNova AR {APP_VERSION}",
         _index_html_path(),

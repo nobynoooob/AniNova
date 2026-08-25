@@ -39,6 +39,26 @@ _DEFAULT_JOB_TIMEOUT = 30.0
 
 _STOP = object()
 
+# UI hook: gui.py registers a callback here so Linux missing-deps failures can
+# surface as a user-facing toast. Decoupled via setter to avoid a circular
+# import (scrapers must never import the GUI module).
+_problem_listener: Optional[Callable] = None
+
+
+def set_launch_problem_listener(fn: Optional[Callable]) -> None:
+    """Register ``fn(message)`` invoked once per detected launch problem."""
+    global _problem_listener
+    _problem_listener = fn
+
+
+def _notify_launch_problem(message: str) -> None:
+    fn = _problem_listener
+    if fn is not None:
+        try:
+            fn(str(message))
+        except Exception:
+            pass
+
 
 class _PlaywrightRuntime:
 
@@ -52,6 +72,7 @@ class _PlaywrightRuntime:
         self._browser = None
         self._pw = None
         self._launch_error: Optional[str] = None
+        self._deps_hint: Optional[str] = None
         self._last_recover = 0.0
         self._thread = threading.Thread(
             target=self._worker, name="pw-runtime", daemon=True
@@ -75,6 +96,7 @@ class _PlaywrightRuntime:
             self._pw = pw
             log_timing("browser:launch", time.monotonic() - t0)
             self._launch_error = None
+            self._deps_hint = None
             return True
         except SystemExit as exc:
             code = exc.code if isinstance(exc.code, int) else 1
@@ -85,7 +107,30 @@ class _PlaywrightRuntime:
             self._launch_error = f"{type(exc).__name__}: {exc}"
             log_http_error("browser", "install+launch", "chromium", exc=exc,
                            note="playwright runtime start")
+        self._classify_launch_failure()
         return False
+
+    def _classify_launch_failure(self):
+        """Detect Linux missing-system-deps failures and surface an actionable
+        hint (stderr + registered UI listener)."""
+        from ..playwright_bootstrap import (
+            looks_like_missing_deps, install_deps_hint,
+        )
+        if not looks_like_missing_deps(self._launch_error):
+            return
+        self._deps_hint = install_deps_hint()
+        sys.stderr.write(
+            "\n"
+            "==============================================================\n"
+            "[!] Chromium cannot start: Linux system libraries are missing.\n"
+            "    Fix it by running this once in your terminal:\n\n"
+            f"        {self._deps_hint}\n\n"
+            "==============================================================\n\n"
+        )
+        try:
+            _notify_launch_problem(self._deps_hint)
+        except Exception:
+            pass
 
     def _try_recover(self) -> bool:
         """Chromium vanished or crashed mid-session: force a reinstall and
@@ -129,8 +174,12 @@ class _PlaywrightRuntime:
                 # Auto-heal: reinstall Chromium + relaunch instead of failing
                 # every job until restart (guards miruro/mkissa/hianime).
                 if not self._try_recover():
-                    res_q.put(("err", RuntimeError(
-                        self._launch_error or "browser not available")))
+                    err = RuntimeError(self._launch_error or "browser not available")
+                    if self._deps_hint:
+                        # Surface the actionable fix through the provider chain
+                        err = RuntimeError(
+                            f"{err} — fix: {self._deps_hint}")
+                    res_q.put(("err", err))
                     continue
             try:
                 res_q.put(("ok", fn(self._browser)))

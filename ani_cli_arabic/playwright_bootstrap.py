@@ -88,3 +88,34 @@ def ensure_playwright_chromium(force: bool = False) -> None:
             print("[v] Playwright Chromium ready.")
         else:
             print("[!] Playwright reported success but no chromium was found.")
+
+
+# ---------------------------------------------------------------------------
+# Linux missing-system-dependency detection
+# ---------------------------------------------------------------------------
+# On Linux, Chromium frequently fails to LAUNCH even after a successful
+# download because OS-level shared libraries are absent. The fix is an OS
+# package install, not another browser download — detect it precisely so the
+# UI can tell the user exactly what to run.
+_MISSING_DEPS_MARKERS = (
+    "host system is missing dependencies",       # playwright's own message
+    "missing dependencies to run browsers",
+    "error while loading shared libraries",
+    "cannot open shared object file",
+    "libnss3", "libatk", "libcups", "libxkbcommon", "libgbm",
+    "libasound", "libxcomposite", "libxdamage", "libxrandr",
+)
+
+
+def looks_like_missing_deps(err_text) -> bool:
+    """True when a browser-launch failure indicates absent Linux system libs."""
+    t = str(err_text or "").lower()
+    if not t or sys.platform == "win32" or sys.platform == "darwin":
+        return False
+    return any(m in t for m in _MISSING_DEPS_MARKERS)
+
+
+def install_deps_hint() -> str:
+    """Actionable terminal command for the user's platform/package manager."""
+    exe = Path(sys.executable).name or "python3"
+    return f"sudo {exe} -m playwright install-deps chromium"
