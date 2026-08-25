@@ -79,5 +79,6 @@ class SettingsManager:
             "auto_skip_osd": True,
             # Watch Together protocol v3 safeguards
             "wt_strict_sync": False,       # opt-in: pause when a guest buffers
+            "dynamic_translation": True,   # online AR synopsis translation
             "wt_countdown_seconds": 3,     # simultaneous-start countdown (0=off)
         }

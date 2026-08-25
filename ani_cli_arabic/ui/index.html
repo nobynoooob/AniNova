@@ -652,6 +652,18 @@
     letter-spacing: .2px;
     color: #a8cfe8;
   }
+
+  /* ---------- dynamic Arabic translation states ---------- */
+  .ar-pending {
+    opacity: .6;
+    animation: arPulse 1.2s ease-in-out infinite;
+  }
+  @keyframes arPulse { 50% { opacity: .35; } }
+  .ar-done { animation: arSwap .3s ease; }
+  @keyframes arSwap {
+    from { opacity: .4; transform: translateY(2px); }
+    to   { opacity: 1;   transform: translateY(0); }
+  }
   .card .hover-card .hc-status {
     font-size: 10px;
     font-weight: 700;
@@ -2150,6 +2162,15 @@
           </div>
           <div class="set-row">
             <div class="set-label">
+              <div class="set-name" data-i18n="settings.dynamic_translation">Dynamic Arabic translation</div>
+              <div class="set-desc" data-i18n="settings.dynamic_translation_desc">Translate anime synopses to Arabic online when no Arabic text is available (cached locally after first use).</div>
+            </div>
+            <div class="set-field">
+              <label class="switch"><input type="checkbox" id="setDynamicTranslation"><span class="slider"></span></label>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-label">
               <div class="set-name" data-i18n="settings.analytics">Anonymous analytics</div>
               <div class="set-desc" data-i18n="settings.analytics_desc">Share anonymous usage stats to improve the app. No personal data.</div>
             </div>
@@ -2289,6 +2310,8 @@
       "settings.discord_rpc_desc": "Show what you're watching on your Discord profile.",
       "settings.show_room_code": "Show Watch Together Room Code on Discord",
       "settings.show_room_code_desc": "Allow friends on Discord to see your active Watch Together room code.",
+      "settings.dynamic_translation": "Dynamic Arabic translation",
+      "settings.dynamic_translation_desc": "Translate anime synopses to Arabic online when no Arabic text is available (cached locally after first use).",
       "settings.analytics": "Anonymous analytics",
       "settings.analytics_desc": "Share anonymous usage stats to improve the app. No personal data.",
       "preroll.preparing": "Preparing your stream\u2026",
@@ -2468,6 +2491,8 @@
       "settings.discord_rpc_desc": "إظهار ما تشاهده على ملف Discord الخاص بك.",
       "settings.show_room_code": "إظهار رمز الغرفة على Discord",
       "settings.show_room_code_desc": "السماح لأصدقائك على Discord برؤية رمز غرفة شاهد معًا.",
+      "settings.dynamic_translation": "ترجمة عربية ديناميكية",
+      "settings.dynamic_translation_desc": "ترجمة ملخصات الأنمي إلى العربية عبر الإنترنت عند عدم توفر نص عربي (يُحفظ محليًا بعد أول استخدام).",
       "settings.analytics": "إحصائيات مجهولة",
       "settings.analytics_desc": "مشاركة إحصائيات استخدام مجهولة لتحسين التطبيق. لا توجد بيانات شخصية.",
       "preroll.preparing": "جاري تجهيز البث\u2026",
@@ -2910,6 +2935,36 @@
     return text;
   }
 
+  // ---------- Dynamic Arabic synopsis translation ----------
+  // When AR mode is active and localizeDescription had no Arabic source, ask
+  // the desktop bridge (translator.py: gtx + disk cache) on a background
+  // promise; swap the text in place once resolved. Token guards make stale
+  // responses harmless (element re-rendered / user toggled back to EN).
+  let _dynArToken = 0;
+  function enhanceWithDynamicArabic(el, title, englishText) {
+    try {
+      if (!el || !el.isConnected) return;
+      if (currentLang !== "ar") return;
+      if (!englishText || isArabicText(englishText)) return;
+      if (!(window.pywebview && window.pywebview.api &&
+            typeof window.pywebview.api.translate_synopsis === "function")) return;
+      const token = String(++_dynArToken);
+      el.dataset.arToken = token;
+      el.classList.add("ar-pending");
+      Promise.resolve(
+        window.pywebview.api.translate_synopsis(String(title || ""), String(englishText))
+      ).then(res => {
+        el.classList.remove("ar-pending");
+        if (currentLang !== "ar") return;                 // toggled back to EN
+        if (!el.isConnected || el.dataset.arToken !== token) return; // stale node
+        const ar = res && res.ok ? String(res.arabic || "") : "";
+        if (!ar || !isArabicText(ar)) return;             // translation unusable
+        el.textContent = ar;
+        el.classList.add("ar-done");
+      }).catch(() => { el.classList.remove("ar-pending"); });
+    } catch (e) {}
+  }
+
   let currentLang = "en";
   try { currentLang = localStorage.getItem("aninova-lang") || "en"; } catch(e) {}
 
@@ -3084,6 +3139,7 @@
     { id: "setPreferredProvider", key: "preferred_provider" },
     { id: "setDiscordRpc", key: "discord_rpc", bool: true },
     { id: "setShowRoomCode", key: "show_rpc_room_code", bool: true },
+    { id: "setDynamicTranslation", key: "dynamic_translation", bool: true },
     { id: "setAnalytics", key: "analytics", bool: true }
   ];
 
@@ -3401,6 +3457,8 @@
     } catch (e) {}
     metaEl.innerHTML = `${timeLine}${rating || status ? `<div class="hc-row">${rating}${status}</div>` : ""}${syn}`;
     metaEl.dataset.loaded = "1";
+    const synNode = metaEl.querySelector(".hc-synopsis");
+    if (synNode) enhanceWithDynamicArabic(synNode, m.title, m.description);
   }
 
   function cardFor(r) {
@@ -3660,6 +3718,8 @@
           </div>
         </div>`;
       slide.querySelector(".f-play").addEventListener("click", () => openDetails(featuredItems[i]));
+      const fdesc = slide.querySelector(".f-desc");
+      if (fdesc) enhanceWithDynamicArabic(fdesc, r.title, r.description);
       wrap.appendChild(slide);
       const dot = document.createElement("button");
       dot.className = "fdot";
@@ -4087,6 +4147,7 @@
 
     const syn = localizeDescription(details.description, details) || t("details.no_synopsis");
     $("#detSynopsis").textContent = syn;
+    enhanceWithDynamicArabic($("#detSynopsis"), title, details.description);
     $("#synToggle").textContent = t("details.show_more");
     $("#synToggle").style.display = syn.length > 230 ? "inline-block" : "none";
     $("#detSynopsis").parentElement.classList.remove("expanded");

@@ -105,11 +105,12 @@ _SETTING_ALL_KEYS = (
     "auto_skip_osd",
     "wt_strict_sync",
     "wt_countdown_seconds",
+    "dynamic_translation",
 )
 _SETTING_BOOL_KEYS = frozenset({
     "auto_next", "discord_rpc", "show_rpc_room_code", "analytics", "mpv_custom_keys",
     "preroll_enabled", "global_hotkeys_enabled", "auto_skip_enabled",
-    "auto_skip_osd", "wt_strict_sync",
+    "auto_skip_osd", "wt_strict_sync", "dynamic_translation",
 })
 _SETTING_INT_KEYS = frozenset({"preroll_seconds", "global_skip_seconds", "wt_countdown_seconds"})
 _SETTING_INT_RANGES = {
@@ -2003,6 +2004,36 @@ class JSApi:
     # Frontend-facing settings (full Settings menu: playback, auto-skip,
     # pre-roll, watch together / global hotkeys, downloads, privacy)
     # ------------------------------------------------------------------
+    def translate_synopsis(self, title: str, text: str) -> Dict:
+        """Dynamic Arabic translation for synopses (Watch Time/i18n engine).
+
+        Called from the UI only when AR mode is active and no curated/API
+        Arabic description exists. Privacy-gated by the ``dynamic_translation``
+        setting (same spirit as the analytics opt-out): when disabled, returns
+        immediately without any network call.
+
+        Runs on pywebview's JS-API worker thread — never blocks rendering.
+        Returns ``{"ok": bool, "arabic": str|None}``."""
+        out = {"ok": False, "arabic": None}
+        text = str(text or "").strip()
+        if not text:
+            return out
+        try:
+            from .settings import SettingsManager
+            if not bool(SettingsManager().get("dynamic_translation", True)):
+                return out
+        except Exception:
+            pass  # settings unavailable -> fail open (feature stays usable)
+        try:
+            from .translator import translate_to_arabic, get_cached_translation
+            cached = get_cached_translation(text)
+            ar = cached if cached else translate_to_arabic(text)
+            if ar:
+                out.update(ok=True, arabic=ar)
+        except Exception:
+            pass
+        return out
+
     def get_settings(self) -> Dict:
         """Return every user setting the UI needs, typed for the form.
 
