@@ -33,7 +33,9 @@ _CLIENT = LoggingClient(
         "Accept": "application/json, text/plain, */*",
         "X-Requested-With": "XMLHttpRequest",
     },
-    timeout=httpx.Timeout(5.0, connect=3.0),
+    # 15s read budget: the ajax endpoints can be slow under load; the old
+    # default (5s) produced frequent ReadTimeouts during episode listing.
+    timeout=httpx.Timeout(15.0, connect=5.0),
     follow_redirects=True,
 )
 

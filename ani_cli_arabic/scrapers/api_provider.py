@@ -14,11 +14,13 @@ USER_AGENT = (
 
 DEFAULT_API_BASE = os.environ.get("ANI_API_BASE_URL", "")
 
+# Public Consumet instances. The old Vercel mirrors (consumet-org-api,
+# anime-api-eta-pied, consumet-api-ivory) were removed: they now answer
+# 402/451/500 and each dead host cost the discovery pass up to 15s
+# (3 providers x 5s) before the chain moved on. Self-hosted deployments
+# should point ANI_API_BASE_URL at their instance instead.
 _API_BASES = [
     "https://api.consumet.org",
-    "https://consumet-org-api.vercel.app",
-    "https://anime-api-eta-pied.vercel.app",
-    "https://consumet-api-ivory.vercel.app",
 ]
 
 _PROVIDERS = ["gogoanime", "aniwatch", "zoro"]

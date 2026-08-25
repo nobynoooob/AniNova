@@ -17,6 +17,7 @@ work happens on the thread that started it).
   Playwright code.
 """
 import queue
+import sys
 import threading
 import time
 from typing import Callable, Dict, Optional
@@ -41,20 +42,25 @@ _STOP = object()
 
 class _PlaywrightRuntime:
 
+    # Minimum seconds between Chromium recovery attempts (install + relaunch)
+    _RECOVER_COOLDOWN = 60.0
+
     def __init__(self):
         self._queue: queue.Queue = queue.Queue()
         self._launch_trigger = threading.Event()
         self._launched = threading.Event()
         self._browser = None
+        self._pw = None
         self._launch_error: Optional[str] = None
+        self._last_recover = 0.0
         self._thread = threading.Thread(
             target=self._worker, name="pw-runtime", daemon=True
         )
         self._thread.start()
 
-    def _worker(self):
-        # Wait until someone actually needs the browser (true lazy start).
-        self._launch_trigger.wait()
+    def _launch_browser(self) -> bool:
+        """Bootstrap (auto-installing Chromium when missing) and launch the
+        shared browser. Worker-thread only. Returns True when connected."""
         try:
             from ..playwright_bootstrap import (
                 configure_browsers_path,
@@ -63,15 +69,48 @@ class _PlaywrightRuntime:
             configure_browsers_path()
             ensure_playwright_chromium()
             from playwright.sync_api import sync_playwright
-            import time
             t0 = time.monotonic()
             pw = sync_playwright().start()
             self._browser = pw.chromium.launch(headless=True, args=_LAUNCH_ARGS)
+            self._pw = pw
             log_timing("browser:launch", time.monotonic() - t0)
+            self._launch_error = None
+            return True
+        except SystemExit as exc:
+            code = exc.code if isinstance(exc.code, int) else 1
+            self._launch_error = f"playwright install exited {code}"
+            log_http_error("browser", "install+launch", "chromium",
+                           exc=None, note=self._launch_error)
         except Exception as exc:
             self._launch_error = f"{type(exc).__name__}: {exc}"
-            log_http_error("browser", "launch", "chromium", exc=exc,
+            log_http_error("browser", "install+launch", "chromium", exc=exc,
                            note="playwright runtime start")
+        return False
+
+    def _try_recover(self) -> bool:
+        """Chromium vanished or crashed mid-session: force a reinstall and
+        relaunch, cooldown-gated so a broken environment cannot loop."""
+        now = time.monotonic()
+        if now - self._last_recover < self._RECOVER_COOLDOWN:
+            return False
+        self._last_recover = now
+        sys.stderr.write(
+            "[browser] Chromium missing or crashed - reinstalling...\n"
+        )
+        try:
+            if self._pw is not None:
+                self._pw.stop()
+        except Exception:
+            pass
+        self._pw = None
+        self._browser = None
+        return self._launch_browser()
+
+    def _worker(self):
+        # Wait until someone actually needs the browser (true lazy start).
+        self._launch_trigger.wait()
+        if not self._launch_browser():
+            pass  # error surfaced per-job below; recovery stays possible
         self._launched.set()
 
         while True:
@@ -86,11 +125,14 @@ class _PlaywrightRuntime:
                 res_q.put(("ok", None))
                 continue
             started.set()
-            try:
-                if self._browser is None or not self._browser.is_connected():
+            if self._browser is None or not self._browser.is_connected():
+                # Auto-heal: reinstall Chromium + relaunch instead of failing
+                # every job until restart (guards miruro/mkissa/hianime).
+                if not self._try_recover():
                     res_q.put(("err", RuntimeError(
                         self._launch_error or "browser not available")))
                     continue
+            try:
                 res_q.put(("ok", fn(self._browser)))
             except Exception as exc:
                 res_q.put(("err", exc))
@@ -117,8 +159,8 @@ class _PlaywrightRuntime:
         self._launch_trigger.set()
         if not self._launched.wait(timeout=_LAUNCH_TIMEOUT):
             return None
-        if self._launch_error:
-            return None
+        # NOTE: a stale _launch_error must NOT gate jobs here — the worker's
+        # recovery pass (Chromium reinstall + relaunch) decides per-job.
         res_q: queue.Queue = queue.Queue(maxsize=1)
         started = threading.Event()
         self._queue.put((fn, res_q, started, cancel_event))

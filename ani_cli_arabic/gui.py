@@ -2730,6 +2730,23 @@ def run_gui(debug: bool = False) -> None:
         monitor.track_app_session()
     except Exception:
         pass
+
+    # Pre-warm Playwright Chromium in a daemon thread: if the browser binaries
+    # are missing, the one-time download starts immediately at launch instead
+    # of stalling the first browser-backed episode click (miruro/mkissa/
+    # hianime). Present-binary case is a cheap no-op check.
+    def _prewarm_chromium():
+        try:
+            from .playwright_bootstrap import ensure_playwright_chromium
+            ensure_playwright_chromium()
+        except Exception as exc:
+            sys.stderr.write(f"[!] Chromium pre-warm skipped: {exc}\n")
+    try:
+        threading.Thread(target=_prewarm_chromium, name="pw-prewarm",
+                         daemon=True).start()
+    except Exception:
+        pass
+
     window = webview.create_window(
         f"AniNova AR {APP_VERSION}",
         _index_html_path(),
