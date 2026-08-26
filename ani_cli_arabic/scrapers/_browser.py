@@ -26,7 +26,9 @@ from ._http_log import log_http_error, log_timing
 
 _LAUNCH_ARGS = [
     "--no-sandbox",
+    "--disable-setuid-sandbox",
     "--disable-dev-shm-usage",
+    "--disable-gpu",
     "--disable-blink-features=AutomationControlled",
 ]
 _LAUNCH_TIMEOUT = 60.0
@@ -86,13 +88,24 @@ class _PlaywrightRuntime:
             from ..playwright_bootstrap import (
                 configure_browsers_path,
                 ensure_playwright_chromium,
+                resolve_chromium_executable,
             )
             configure_browsers_path()
-            ensure_playwright_chromium()
+            # A system/distro Chromium (env override or /usr/bin/chromium)
+            # removes the need for the Playwright-managed download entirely.
+            exe = resolve_chromium_executable()
+            if exe:
+                print(f"[browser] using system Chromium: {exe}")
+            else:
+                ensure_playwright_chromium()
             from playwright.sync_api import sync_playwright
             t0 = time.monotonic()
             pw = sync_playwright().start()
-            self._browser = pw.chromium.launch(headless=True, args=_LAUNCH_ARGS)
+            self._browser = pw.chromium.launch(
+                headless=True,
+                args=_LAUNCH_ARGS,
+                executable_path=exe,
+            )
             self._pw = pw
             log_timing("browser:launch", time.monotonic() - t0)
             self._launch_error = None
@@ -107,12 +120,19 @@ class _PlaywrightRuntime:
             self._launch_error = f"{type(exc).__name__}: {exc}"
             log_http_error("browser", "install+launch", "chromium", exc=exc,
                            note="playwright runtime start")
+        # Raw failure reason on stdout for terminal log tracing (after
+        # classification so the actionable hint, when present, is included).
         self._classify_launch_failure()
+        print(f"[browser] launch FAILED: {self._launch_error}")
+        if getattr(self, "_deps_hint", None):
+            print(f"[browser] fix: {self._deps_hint}")
         return False
 
     def _classify_launch_failure(self):
         """Detect Linux missing-system-deps failures and surface an actionable
         hint (stderr + registered UI listener)."""
+        # Always defined, even for instances built without __init__ (tests).
+        self._deps_hint = getattr(self, "_deps_hint", None)
         from ..playwright_bootstrap import (
             looks_like_missing_deps, install_deps_hint,
         )
@@ -174,11 +194,11 @@ class _PlaywrightRuntime:
                 # Auto-heal: reinstall Chromium + relaunch instead of failing
                 # every job until restart (guards miruro/mkissa/hianime).
                 if not self._try_recover():
+                    hint = getattr(self, "_deps_hint", None)
                     err = RuntimeError(self._launch_error or "browser not available")
-                    if self._deps_hint:
+                    if hint:
                         # Surface the actionable fix through the provider chain
-                        err = RuntimeError(
-                            f"{err} — fix: {self._deps_hint}")
+                        err = RuntimeError(f"{err} — fix: {hint}")
                     res_q.put(("err", err))
                     continue
             try:

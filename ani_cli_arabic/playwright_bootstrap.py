@@ -13,6 +13,7 @@ imported here would break the GUI at runtime.
 import os
 import sys
 from pathlib import Path
+from typing import Optional
 
 
 def configure_browsers_path() -> None:
@@ -119,3 +120,34 @@ def install_deps_hint() -> str:
     """Actionable terminal command for the user's platform/package manager."""
     exe = Path(sys.executable).name or "python3"
     return f"sudo {exe} -m playwright install-deps chromium"
+
+
+# ---------------------------------------------------------------------------
+# System-Chromium resolution (Linux binary builds)
+# ---------------------------------------------------------------------------
+# Distro Chromium builds ship working sandbox setups and their full dependency
+# sets, so preferring /usr/bin/chromium sidesteps both the one-time download
+# and most missing-deps launch failures on Linux.
+
+
+def resolve_chromium_executable() -> Optional[str]:
+    """Return a system Chromium binary path when one should be used.
+
+    Order:
+      1. ``PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`` env (must exist, else warned
+         and ignored)
+      2. ``/usr/bin/chromium`` (Linux)
+      3. ``/usr/bin/chromium-browser`` (Linux)
+    Returns None when the bundled/downloaded Playwright build should be used.
+    """
+    env_path = os.environ.get("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH", "").strip()
+    if env_path:
+        if os.path.isfile(env_path):
+            return env_path
+        print(f"[!] PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH is set but missing: "
+              f"{env_path} - ignoring.", file=sys.stderr)
+    if sys.platform.startswith("linux"):
+        for candidate in ("/usr/bin/chromium", "/usr/bin/chromium-browser"):
+            if os.path.isfile(candidate):
+                return candidate
+    return None
