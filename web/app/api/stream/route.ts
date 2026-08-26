@@ -42,6 +42,45 @@ export async function GET(req: Request) {
   const range = req.headers.get("range");
   if (range) upstreamHeaders.Range = range;
 
+  /**
+   * Rewrite every URL inside an HLS manifest to route back through this
+   * proxy. Without this, hls.js resolves the playlist's RELATIVE segment /
+   * variant / key URIs against localhost (e.g. /api/1080p/index.m3u8) and
+   * dies with LEVEL_LOAD_ERROR.
+   *
+   * Handles: variant playlist lines, media segment lines, and URI="…"
+   * attributes (#EXT-X-KEY, #EXT-X-MAP, #EXT-X-MEDIA). The original referer
+   * and UA are encoded into every proxied child URL so segment fetches keep
+   * the upstream CDN's required headers.
+   */
+  function rewriteM3u8(bodyText: string, baseUrl: string): string {
+    const wrap = (u: string): string => {
+      if (!u || /^(data|blob):/i.test(u)) return u;
+      try {
+        const abs = new URL(u, baseUrl).toString();
+        const p = new URLSearchParams({ url: abs });
+        if (referer) p.set("referer", referer);
+        const ownUa = searchParams.get("ua");
+        if (ownUa) p.set("ua", ownUa);
+        return `/api/stream?${p.toString()}`;
+      } catch {
+        return u;
+      }
+    };
+    return bodyText
+      .split(/\r?\n/)
+      .map((line) => {
+        const t = line.trim();
+        if (!t) return line;
+        if (t.startsWith("#")) {
+          // Attribute URIs (keys, init segments, alternate audio/subs)
+          return line.replace(/URI="([^"]+)"/g, (_m, u) => `URI="${wrap(u)}"`);
+        }
+        return wrap(t);
+      })
+      .join("\n");
+  }
+
   try {
     const upstream = await fetch(target.toString(), {
       headers: upstreamHeaders,
@@ -56,6 +95,7 @@ export async function GET(req: Request) {
     }
     const headers = new Headers();
     headers.set("Access-Control-Allow-Origin", "*");
+    headers.set("Access-Control-Allow-Headers", "*");
     headers.set("Cache-Control", "no-store");
     const pass = ["content-type", "content-length", "content-range", "accept-ranges"];
     for (const h of pass) {
@@ -65,6 +105,23 @@ export async function GET(req: Request) {
     if (!headers.has("content-type")) {
       headers.set("content-type", "application/octet-stream");
     }
+
+    // HLS manifests: rewrite inner URLs instead of piping raw bytes.
+    const ct = (headers.get("content-type") || "").toLowerCase();
+    const isM3u8 =
+      ct.includes("mpegurl") ||
+      ct.includes("m3u") ||
+      target.pathname.toLowerCase().endsWith(".m3u8");
+    if (isM3u8) {
+      const text = await upstream.text();
+      headers.set("content-type", "application/vnd.apple.mpegurl");
+      headers.delete("content-length");
+      return new NextResponse(rewriteM3u8(text, target.toString()), {
+        status: 200,
+        headers,
+      });
+    }
+
     return new NextResponse(upstream.body, {
       status: upstream.status,
       headers,
@@ -83,7 +140,7 @@ export async function OPTIONS() {
     headers: {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, OPTIONS",
-      "Access-Control-Allow-Headers": "Range, Content-Type",
+      "Access-Control-Allow-Headers": "*",
     },
   });
 }

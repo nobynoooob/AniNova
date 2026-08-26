@@ -28,11 +28,15 @@ export default function Player({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const artRef = useRef<any>(null);
   const [status, setStatus] = useState<string>("idle");
+  // LEVEL_LOAD_ERROR retry budget: transient CDN hiccups get an automatic
+  // reload before we escalate to server fallback.
+  const hlsRetries = useRef(0);
 
   useEffect(() => {
     let disposed = false;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let hls: any = null;
+    hlsRetries.current = 0;
 
     async function build() {
       if (!containerRef.current || !source) return;
@@ -49,17 +53,49 @@ export default function Player({
       const playM3u8 = (video: HTMLVideoElement, url: string, art: unknown) => {
         if (Hls.isSupported()) {
           if (hls) hls.destroy();
-          hls = new Hls({ maxBufferLength: 60, maxMaxBufferLength: 180 });
+          hls = new Hls({
+            maxBufferLength: 60,
+            maxMaxBufferLength: 180,
+            // All requests already flow through /api/stream (same-origin),
+            // but keep credentials off so proxied CORS stays simple.
+            xhrSetup: (xhr: XMLHttpRequest) => {
+              xhr.withCredentials = false;
+            },
+          });
           hls.loadSource(url);
           hls.attachMedia(video);
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           hls.on(Hls.Events.MANIFEST_PARSED, () => (art as any)?.play());
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           hls.on(Hls.Events.ERROR, (_e: unknown, data: any) => {
-            if (data?.fatal) {
-              setStatus("error");
-              onError(`HLS fatal: ${data.details || "unknown"}`);
+            if (!data?.fatal) return;
+            const loadErrors = new Set([
+              Hls.ErrorDetails.LEVEL_LOAD_ERROR,
+              Hls.ErrorDetails.LEVEL_LOAD_TIMEOUT,
+              Hls.ErrorDetails.MANIFEST_LOAD_ERROR,
+              Hls.ErrorDetails.MANIFEST_LOAD_TIMEOUT,
+            ]);
+            if (
+              loadErrors.has(data.details) &&
+              hlsRetries.current < 2 &&
+              !disposed
+            ) {
+              // Automatic proxied reload: transient CDN hiccup or a stale
+              // manifest — retry through the same /api/stream route.
+              hlsRetries.current += 1;
+              setStatus("loading");
+              setTimeout(() => {
+                if (disposed || !hls) return;
+                hls.loadSource(
+                  url + (url.includes("?") ? "&" : "?") +
+                    `_r=${hlsRetries.current}`
+                );
+                hls.startLoad();
+              }, 800 * hlsRetries.current);
+              return;
             }
+            setStatus("error");
+            onError(`HLS fatal: ${data.details || "unknown"}`);
           });
         } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
           // Safari native HLS
