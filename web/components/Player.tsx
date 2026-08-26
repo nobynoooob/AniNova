@@ -7,6 +7,12 @@
  */
 import { useEffect, useRef, useState } from "react";
 
+interface SubtitleOpt {
+  url: string;
+  lang: string;
+  label?: string;
+}
+
 interface PlayerProps {
   source: string | null;      // proxied url (/api/stream?url=...)
   poster?: string;
@@ -14,6 +20,8 @@ interface PlayerProps {
   onEnded: () => void;
   onError: (err: string) => void;
   onReady?: () => void;
+  /** Soft subtitle tracks (e.g. AR SUB VTT). Arabic is auto-selected. */
+  subtitles?: SubtitleOpt[];
 }
 
 export default function Player({
@@ -23,6 +31,7 @@ export default function Player({
   onEnded,
   onError,
   onReady,
+  subtitles,
 }: PlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -131,6 +140,20 @@ export default function Player({
         type: "m3u8",
       });
 
+      // Soft subtitle tracks; Arabic auto-selected when present so AR SUB
+      // users never need to dig through the settings menu.
+      const arTrack = (subtitles || []).find(
+        (st) => st.lang.toLowerCase().startsWith("ar")
+      );
+      if (arTrack) {
+        artRef.current.subtitle = {
+          url: arTrack.url,
+          type: arTrack.url.endsWith(".srt") ? "srt" : "vtt",
+          style: { color: "#FFA04D", textShadow: "0 1px 3px #000" },
+        };
+        artRef.current.emit("artplayer-subtitle", arTrack);
+      }
+
       artRef.current.on("video:ended", () => onEnded());
       artRef.current.on("video:error", () => {
         setStatus("error");
@@ -153,9 +176,9 @@ export default function Player({
       } catch {}
       artRef.current = null;
     };
-    // Rebuild only when the actual source changes
+    // Rebuild only when the actual source or subtitle set changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source]);
+  }, [source, subtitles]);
 
   return (
     <div className="relative w-full">

@@ -198,6 +198,7 @@ export default function WatchPage() {
             source={currentSource?.url || null}
             poster={info?.banner || info?.poster}
             autoPlay={autoPlay}
+            subtitles={audio === "AR SUB" ? currentSource?.subtitles : undefined}
             onEnded={() => {
               if (autoNext && nextEp) goEpisode(nextEp);
             }}
