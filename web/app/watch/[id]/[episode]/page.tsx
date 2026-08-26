@@ -4,7 +4,8 @@ import EpisodeDrawer from "@/components/EpisodeDrawer";
 import InfoSidebar from "@/components/InfoSidebar";
 import Player from "@/components/Player";
 import { AnimeInfo, EpisodeEntry, StreamSource } from "@/lib/types";
-import { ArrowLeft, ArrowRight, Download, Monitor, Play } from "lucide-react";
+import { ArrowLeft, ArrowRight, Download, Monitor, Play, RotateCcw } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -24,6 +25,8 @@ export default function WatchPage() {
   const [serverIdx, setServerIdx] = useState(0);
   const [loadingStream, setLoadingStream] = useState(true);
   const [streamError, setStreamError] = useState<string | null>(null);
+  const [showId, setShowId] = useState<string | undefined>(undefined);
+  const [toast, setToast] = useState<{ msg: string; kind: "error" | "info" } | null>(null);
   const [audio, setAudio] = useState<"SUB" | "DUB" | "AR SUB">("SUB");
   const [autoPlay, setAutoPlay] = useState(true);
   const [autoNext, setAutoNext] = useState(true);
@@ -43,6 +46,7 @@ export default function WatchPage() {
           setInfo(d.info);
           setEpisodes(d.episodes || []);
           setEpisodesError(d.episodesError || null);
+          setShowId(d.showId || undefined);
         } else {
           setEpisodesError(d.error || "failed to load");
         }
@@ -61,12 +65,16 @@ export default function WatchPage() {
       setStreamError(null);
       setSources([]);
       setServerIdx(0);
+      setToast(null);
       try {
         const cat = audio === "SUB" ? "sub" : audio === "DUB" ? "dub" : "ar_sub";
-        const res = await fetch(
-          `/api/anime/stream?title=${encodeURIComponent(info.title)}` +
-            `&episode=${episode}&category=${cat}`
-        );
+        const params = new URLSearchParams({
+          title: info.title,
+          episode: String(episode),
+          category: cat,
+        });
+        if (showId) params.set("showId", showId);
+        const res = await fetch(`/api/anime/stream?${params}`);
         const data = await res.json();
         if (!data.ok || !data.sources?.length) {
           throw new Error(data.error || "no sources");
@@ -89,11 +97,13 @@ export default function WatchPage() {
         setServerIdx(0);
         setLoadingStream(false);
       } catch (e) {
-        setStreamError(String(e instanceof Error ? e.message : e));
+        const msg = String(e instanceof Error ? e.message : e);
+        setStreamError(msg);
+        setToast({ msg: `Stream failed to load — ${msg}`, kind: "error" });
         setLoadingStream(false);
       }
     },
-    [info?.title, episode, audio]
+    [info?.title, episode, audio, showId]
   );
 
   useEffect(() => {
@@ -330,6 +340,41 @@ export default function WatchPage() {
           </aside>
         )}
       </div>
+
+      {/* Stream error toast with retry */}
+      <AnimatePresence>
+      {toast && !loadingStream && (
+        <motion.div
+          initial={{ y: 40, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 40, opacity: 0 }}
+          className={`fixed bottom-6 left-1/2 z-[90] -translate-x-1/2 rounded-2xl border
+                      px-5 py-3.5 shadow-card backdrop-blur-md flex items-center gap-4
+                      ${toast.kind === "error"
+                        ? "border-red-500/60 bg-[#2a1518]/95 text-red-200"
+                        : "border-line bg-surface/95 text-ink-sec"}`}
+        >
+          <span className="text-sm font-semibold">{toast.msg}</span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                setToast(null);
+                resolve(0);
+              }}
+              className="btn-sunrise !px-4 !py-1.5 !text-xs"
+            >
+              <RotateCcw size={13} /> Retry
+            </button>
+            <button
+              onClick={() => setToast(null)}
+              className="btn-ghost !px-3 !py-1.5 !text-xs"
+            >
+              Dismiss
+            </button>
+          </div>
+        </motion.div>
+      )}
+      </AnimatePresence>
 
       {/* Episode-list error hint */}
       {episodesError && !episodes.length && (

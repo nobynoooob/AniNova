@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { fetchInfo } from "@/lib/anilist";
-import { consumetEpisodes, consumetSearch } from "@/lib/consumet";
+import { resolveEpisodes } from "@/lib/streams";
+import { EpisodeEntry } from "@/lib/types";
 
-export const revalidate = 600;
+export const revalidate = 300;
 
 export async function GET(
   _req: Request,
@@ -15,16 +16,20 @@ export async function GET(
       { status: 404 }
     );
   }
-  // Episode list is upstream-dependent; best-effort so metadata still renders.
-  let episodes: { num: number; id: string; title?: string }[] = [];
+  // Episode list: AllAnime (primary) -> AniZip mappings (fallback).
+  // Best-effort so metadata still renders when both miss.
+  let episodes: EpisodeEntry[] = [];
+  let titles: Record<number, string> = {};
+  let episodeSource = "none";
+  let showId: string | undefined;
   let episodesError: string | undefined;
   try {
-    const found = await consumetSearch(info.title);
-    if (found) {
-      episodes = await consumetEpisodes(found.base, found.provider, found.animeId);
-    } else {
-      episodesError = "no provider instance reachable";
-    }
+    const res = await resolveEpisodes(info.title, info.id);
+    episodes = res.episodes;
+    titles = res.titles;
+    episodeSource = res.episodeSource;
+    showId = res.showId;
+    if (!episodes.length) episodesError = "no episode data from providers";
   } catch (e) {
     episodesError = String(e instanceof Error ? e.message : e);
   }
@@ -32,6 +37,9 @@ export async function GET(
     ok: true,
     info,
     episodes,
+    titles,
+    episodeSource,
+    showId,
     episodesError,
   });
 }

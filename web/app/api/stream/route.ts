@@ -34,9 +34,11 @@ export async function GET(req: Request) {
   }
 
   const upstreamHeaders: Record<string, string> = {
-    "User-Agent": UA,
+    "User-Agent": searchParams.get("ua") || UA,
     Accept: "*/*",
   };
+  const referer = searchParams.get("referer");
+  if (referer) upstreamHeaders.Referer = referer;
   const range = req.headers.get("range");
   if (range) upstreamHeaders.Range = range;
 
