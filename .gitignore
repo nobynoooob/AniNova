@@ -15,6 +15,9 @@ eggs/
 .eggs/
 lib/
 lib64/
+# Next.js web app keeps its TypeScript sources in web/lib
+!web/lib/
+!web/lib/**
 /site
 parts/
 sdist/
